@@ -1,3 +1,4 @@
+
 export interface Channel {
   id: string;
   name: string;
@@ -36,4 +37,14 @@ export interface Comment {
   likes: number;
   replyCount?: number;
   replies?: Comment[]; // For nested replies if fetched
+}
+
+export interface WatchHistoryItem {
+  id: string; // Firestore document ID
+  videoId: string;
+  videoTitle: string;
+  channelId: string;
+  channelName: string;
+  thumbnailUrl: string;
+  watchedAt: Date; // JS Date object, converted from Firestore Timestamp
 }

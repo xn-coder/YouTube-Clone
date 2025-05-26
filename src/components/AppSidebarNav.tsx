@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Flame, Youtube, UserCircle, ChevronRight } from 'lucide-react';
+import { Home, Flame, Youtube, UserCircle, ChevronRight, History } from 'lucide-react'; // Added History icon
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -16,8 +16,12 @@ import { useAuth } from '@/contexts/AuthContext';
 const mainNavItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/trending', label: 'Trending', icon: Flame },
-  { href: '/subscriptions', label: 'Subscriptions Overview', icon: Youtube },
+  { href: '/subscriptions', label: 'Subscriptions', icon: Youtube }, // Renamed for consistency
 ];
+
+const userNavItems = [ // Added for authenticated users
+    { href: '/history', label: 'History', icon: History },
+]
 
 interface AppSidebarNavProps {
   isMobile?: boolean;
@@ -51,7 +55,6 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
 
       setIsLoadingSubscriptions(true);
       try {
-        // Pass user.uid to fetch user-specific subscriptions
         const previews = await getSubscribedChannelPreviews(user.uid);
         setSubscribedChannels(previews);
       } catch (error) {
@@ -85,6 +88,20 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
       {!authLoading && user && (
         <>
           <Separator className="my-3" />
+          {userNavItems.map((item) => (
+            <Button
+              key={item.label}
+              variant={pathname === item.href ? 'secondary' : 'ghost'}
+              className="justify-start"
+              asChild
+            >
+              <Link href={item.href} className="flex items-center gap-3 rounded-lg px-3 py-2 text-foreground transition-all hover:text-primary">
+                <item.icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            </Button>
+          ))}
+          <Separator className="my-3" />
           {isLoadingSubscriptions && !isMobile && (
             <>
               <h3 className="px-3 py-2 text-xs font-semibold text-muted-foreground tracking-wider">SUBSCRIPTIONS</h3>
@@ -104,7 +121,7 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
                 >
                   <Link href={`/channel/${channel.id}`} className="flex items-center gap-3 rounded-lg px-3 py-2 text-foreground transition-all hover:text-primary">
                     <Avatar className="h-6 w-6">
-                      <AvatarImage src={channel.avatarUrl} alt={channel.name} data-ai-hint="channel avatar small" />
+                      <AvatarImage src={channel.avatarUrl} alt={channel.name} data-ai-hint="channel avatar" />
                       <AvatarFallback>
                         <UserCircle className="h-full w-full text-muted-foreground" />
                       </AvatarFallback>
