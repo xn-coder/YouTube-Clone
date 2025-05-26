@@ -20,7 +20,8 @@ interface PaginatedCommentsResponse {
 }
 
 // Helper to fetch channel details (including avatar and subscribers)
-async function fetchChannelData(channelIds: string[]): Promise<Map<string, Channel>> {
+// Exported to be used by other server actions like in user.ts
+export async function fetchChannelData(channelIds: string[]): Promise<Map<string, Channel>> {
   if (!API_KEY) {
     console.warn('YOUTUBE_API_KEY is not set. Channel data may be incomplete.');
     return new Map();
