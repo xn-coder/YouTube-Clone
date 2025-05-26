@@ -14,12 +14,38 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogIn, LogOut, UserCircle, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { auth } from '@/lib/firebase'; // Import auth for client-side signOut
-import { signOut } from 'firebase/auth'; // Import signOut from firebase/auth
+import { auth } from '@/lib/firebase'; 
+import { signOut } from 'firebase/auth'; 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from './ui/skeleton';
+import { cn } from '@/lib/utils';
+
+// Helper function to get a consistent avatar background color class based on user ID
+const getAvatarColorClass = (userId: string): string => {
+  const colors = [
+    'bg-red-500',
+    'bg-orange-500',
+    'bg-yellow-500',
+    'bg-lime-500',
+    'bg-green-500',
+    'bg-teal-500',
+    'bg-sky-500',
+    'bg-blue-500',
+    'bg-indigo-500',
+    'bg-purple-500',
+    'bg-pink-500',
+    'bg-rose-500',
+  ];
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  const index = Math.abs(hash % colors.length);
+  return colors[index];
+};
 
 
 export function UserNav() {
@@ -29,11 +55,9 @@ export function UserNav() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth); // Use client-side signOut
+      await signOut(auth); 
       toast({ title: 'Logged out', description: 'You have been successfully logged out.' });
-      router.push('/'); // Redirect to home
-      // Optionally, force a reload to ensure all state is cleared if needed:
-      // router.refresh(); // or window.location.reload(); but router.refresh() is smoother
+      router.push('/'); 
     } catch (error: any) {
       console.error("Sign out error:", error);
       toast({ title: 'Logout Failed', description: error.message || 'Sign out failed.', variant: 'destructive' });
@@ -63,12 +87,16 @@ export function UserNav() {
     );
   }
 
-  const getInitials = (email?: string | null) => {
+  const getInitials = (email?: string | null): string | JSX.Element => {
     if (email && typeof email === 'string' && email.length > 0) {
       return email.charAt(0).toUpperCase();
     }
-    return <UserCircle className="h-8 w-8" />;
+    return <UserCircle className="h-8 w-8 text-muted-foreground" />; // Ensure UserCircle has a color if no dynamic bg
   };
+
+  const userInitialsOrIcon = getInitials(user.email);
+  const avatarColorClass = typeof userInitialsOrIcon === 'string' ? getAvatarColorClass(user.uid) : '';
+
 
   return (
     <DropdownMenu>
@@ -76,12 +104,17 @@ export function UserNav() {
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10">
             <AvatarImage 
-              src={user.photoURL || undefined} // Pass undefined if photoURL is null/empty to trigger fallback
+              src={user.photoURL || undefined} 
               alt={user.displayName || user.email || "User avatar"} 
               data-ai-hint="user avatar" 
             />
-            <AvatarFallback className="text-lg font-semibold">
-              {user.photoURL ? null : getInitials(user.email)}
+            <AvatarFallback 
+              className={cn(
+                "text-lg font-semibold",
+                avatarColorClass && `text-primary-foreground ${avatarColorClass}` // Apply color if initials are a string
+              )}
+            >
+              {user.photoURL ? null : userInitialsOrIcon}
             </AvatarFallback>
           </Avatar>
         </Button>
