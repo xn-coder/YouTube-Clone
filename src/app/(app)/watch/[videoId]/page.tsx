@@ -1,7 +1,7 @@
 
 'use client'; // Make this a client component to use useEffect and useRef
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, use } from 'react'; // Import use
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { VideoPlayer } from '@/components/video/VideoPlayer';
@@ -22,7 +22,10 @@ import { recordWatchEvent } from '@/app/actions/user';
 // However, if this page is fully client-rendered for video details, metadata might need dynamic updates.
 // For now, assuming metadata is handled or we'll address it if issues arise with client rendering.
 
-export default function WatchPage({ params }: { params: { videoId: string } }) {
+export default function WatchPage({ params: paramsProp }: { params: { videoId: string } }) {
+  // Unwrap params using React.use() as per Next.js recommendation for client components
+  // It's assumed that Next.js might pass params as a Promise in certain scenarios.
+  const params = use(paramsProp);
   const cleanVideoId = params.videoId?.trim();
   const router = useRouter(); // For potential client-side navigation if needed
 
