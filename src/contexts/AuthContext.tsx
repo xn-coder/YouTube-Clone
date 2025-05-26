@@ -4,7 +4,7 @@
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { auth, isFirebasePotentiallyMisconfigured } from '@/lib/firebase';
+import { auth, isFirebasePotentiallyMisconfigured } from '@/lib/firebase'; // Import isFirebasePotentiallyMisconfigured
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -29,35 +29,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
         appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
       });
-    }
 
-    if (isFirebasePotentiallyMisconfigured) {
-      if (typeof window !== 'undefined') {
-        console.warn("AuthProvider: Firebase appears to be misconfigured. User authentication may not work correctly. Please check your .env.local file and Firebase project settings.");
-      }
-      setLoading(false); // Stop loading, user will remain null or as per last known state if any
-      return; // Do not subscribe to onAuthStateChanged if Firebase is likely misconfigured
-    }
-
-    if (auth && typeof auth.onAuthStateChanged === 'function') {
-      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-        if (currentUser) {
-          console.log('%cAuthContext: User detected by onAuthStateChanged. UID:', 'color: green;', currentUser.uid, 'Email:', currentUser.email);
-        } else {
-          console.log('%cAuthContext: No user detected by onAuthStateChanged (user is null).', 'color: orange;');
-        }
-        setUser(currentUser);
+      if (isFirebasePotentiallyMisconfigured) { // Check the flag here
+        console.warn(
+          "%cAuthContext: Firebase appears to be misconfigured according to `isFirebasePotentiallyMisconfigured` flag from `firebase.ts`. " +
+          "User authentication and session persistence will likely fail. " +
+          "Please meticulously check your `.env.local` file, ensure all `NEXT_PUBLIC_FIREBASE_...` variables are correct with your *actual* Firebase project credentials, and that the development server has been restarted after any changes.",
+          "color: red; font-size: 1.1em; font-weight: bold;"
+        );
         setLoading(false);
-      });
-      // Cleanup subscription on unmount
-      return () => unsubscribe();
-    } else {
+        setUser(null); // Ensure user is null if misconfigured
+        return; // Stop further Firebase auth setup if misconfigured
+      }
+    }
+
+    // This check is important for cases where auth object might be unexpectedly null or malformed
+    // even if isFirebasePotentiallyMisconfigured was false (e.g., other SDK issues).
+    if (!auth || typeof auth.onAuthStateChanged !== 'function') {
        if (typeof window !== 'undefined') {
-        console.error("AuthProvider: Firebase auth service is not available. Cannot track authentication state.");
+        console.error(
+          "%cAuthContext: Firebase auth service is not available or `onAuthStateChanged` is not a function. " +
+          "This usually indicates a severe Firebase initialization issue. Cannot track authentication state.",
+          "color: red; font-size: 1.1em; font-weight: bold;"
+        );
       }
       setUser(null);
       setLoading(false);
+      return;
     }
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        console.log('%cAuthContext: User detected by onAuthStateChanged. UID:', 'color: green;', currentUser.uid, 'Email:', currentUser.email);
+      } else {
+        console.log('%cAuthContext: No user detected by onAuthStateChanged (user is null).', 'color: orange;');
+      }
+      setUser(currentUser);
+      setLoading(false);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []); // Empty dependency array means this effect runs once on mount and cleans up on unmount
 
   return (
@@ -74,4 +86,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
