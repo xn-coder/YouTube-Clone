@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'VideoVerse',
-  description: 'Your universe of videos.',
+  title: 'Youtube Clone',
+  description: 'A YouTube clone application.',
 };
 
 export default function RootLayout({

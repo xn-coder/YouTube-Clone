@@ -23,8 +23,8 @@ export async function generateMetadata({ params }: { params: { videoId: string }
     return { title: 'Video Not Found' };
   }
   return { 
-    title: `${video.title} - VideoVerse`,
-    description: video.description || `Watch ${video.title} on VideoVerse.`,
+    title: `${video.title} - Youtube Clone`,
+    description: video.description || `Watch ${video.title} on Youtube Clone.`,
   };
 }
 
@@ -43,8 +43,6 @@ export default async function WatchPage({ params }: { params: { videoId: string 
     return null;
   }
 
-  // Fetch initial comments
-  // Recommended videos will be fetched client-side by the RecommendedVideos component if user is logged in
   const initialCommentsData = await getCommentsByVideoId(cleanVideoId, 20);
 
   return (
@@ -101,7 +99,7 @@ export default async function WatchPage({ params }: { params: { videoId: string 
         {/* Sidebar: Recommended videos */}
         <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit">
           <RecommendedVideos 
-            videoId={cleanVideoId} // Pass videoId, component will fetch if user logged in
+            videoId={cleanVideoId} 
           />
         </div>
       </div>

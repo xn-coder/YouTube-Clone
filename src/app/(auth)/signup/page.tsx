@@ -1,12 +1,9 @@
 
 'use client';
 
-import { useActionState } from 'react';
-import { useFormStatus } from 'react-dom'; // Corrected import
-import { useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { signUpWithEmail, type AuthFormState } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,36 +11,108 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/Spinner';
 import { Logo } from '@/components/Logo';
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending ? <Spinner className="mr-2" /> : null}
-      Create Account
-    </Button>
-  );
-}
+import { auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignupPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const initialState: AuthFormState = { message: '', success: false };
-  const [state, formAction] = useActionState(signUpWithEmail, initialState);
+  const [isLoading, setIsLoading] = useState(false);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (state.message) {
+    // If user is already logged in and auth is not loading, redirect them
+    if (user && !authLoading) {
+      router.push('/');
+    }
+  }, [user, authLoading, router]);
+
+  const handleSignUp = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoading(true);
+
+    const formData = new FormData(event.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    if (!email || !password) {
       toast({
-        title: state.success ? 'Success' : 'Error',
-        description: state.message,
-        variant: state.success ? 'default' : 'destructive',
+        title: 'Error',
+        description: 'Email and password are required.',
+        variant: 'destructive',
       });
+      setIsLoading(false);
+      return;
     }
-    if (state.success) {
-       // Wait for toast to show then redirect
-      setTimeout(() => router.push('/'), 1000);
+    if (password.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 6 characters.',
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+      return;
     }
-  }, [state, toast, router]);
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      if (userCredential.user) {
+        await sendEmailVerification(userCredential.user);
+        toast({
+          title: 'Success!',
+          description: 'Account created. A verification email has been sent. Please check your inbox and then log in.',
+        });
+        // Don't automatically sign in. User should verify then log in.
+        router.push('/login'); 
+      } else {
+        // This case should ideally not be reached if createUserWithEmailAndPassword succeeds
+         toast({
+          title: 'Account Created',
+          description: 'Account created, but failed to send verification email. Please try logging in.',
+        });
+        router.push('/login');
+      }
+    } catch (error: any) {
+      console.error("Sign up error:", error);
+      let errorMessage = 'Sign up failed. Please try again.';
+       if (error.code) {
+        switch (error.code) {
+          case 'auth/email-already-in-use':
+            errorMessage = 'This email address is already in use. Please try a different email or log in.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'The email address is not valid.';
+            break;
+          case 'auth/operation-not-allowed':
+            errorMessage = 'Email/password accounts are not enabled.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'The password is too weak. Please use a stronger password.';
+            break;
+          default:
+            errorMessage = error.message || 'An unexpected error occurred.';
+        }
+      }
+      toast({
+        title: 'Sign Up Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Prevent rendering form if already logged in and redirecting
+  if (user && !authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <Spinner size="h-12 w-12" />
+        <p className="mt-4 text-muted-foreground">Redirecting...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center space-y-6">
@@ -53,7 +122,7 @@ export default function SignupPage() {
           <CardTitle className="text-2xl">Create Account</CardTitle>
           <CardDescription>Enter your email and password to create an account.</CardDescription>
         </CardHeader>
-        <form action={formAction}>
+        <form onSubmit={handleSignUp}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -64,10 +133,12 @@ export default function SignupPage() {
               <Input id="password" name="password" type="password" required minLength={6} />
               <p className="text-xs text-muted-foreground">Password must be at least 6 characters.</p>
             </div>
-            {/* Add confirm password if desired */}
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <SubmitButton />
+            <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
+              {isLoading ? <Spinner className="mr-2" /> : null}
+              Create Account
+            </Button>
             <p className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
               <Link href="/login" className="font-medium text-primary hover:underline">

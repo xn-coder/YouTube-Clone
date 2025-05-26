@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogIn, LogOut, UserCircle, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { signOutUser } from '@/app/actions/auth';
+import { auth } from '@/lib/firebase'; // Import auth for client-side signOut
+import { signOut } from 'firebase/auth'; // Import signOut from firebase/auth
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -27,12 +28,13 @@ export function UserNav() {
   const { toast } = useToast();
 
   const handleLogout = async () => {
-    const result = await signOutUser();
-    if (result.success) {
+    try {
+      await signOut(auth); // Use client-side signOut
       toast({ title: 'Logged out', description: 'You have been successfully logged out.' });
-      router.push('/'); // Redirect to home or login page
-    } else {
-      toast({ title: 'Logout Failed', description: result.message, variant: 'destructive' });
+      router.push('/'); // Redirect to home
+    } catch (error: any) {
+      console.error("Sign out error:", error);
+      toast({ title: 'Logout Failed', description: error.message || 'Sign out failed.', variant: 'destructive' });
     }
   };
 
@@ -64,7 +66,6 @@ export function UserNav() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10">
-            {/* Firebase user object might have photoURL, otherwise use placeholder */}
             <AvatarImage src={user.photoURL || "https://placehold.co/40x40.png"} alt={user.displayName || user.email || "User avatar"} data-ai-hint="user avatar" />
             <AvatarFallback>
               <UserCircle className="h-8 w-8" />
@@ -75,7 +76,7 @@ export function UserNav() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.displayName || 'User'}</p>
+            <p className="text-sm font-medium leading-none">{user.displayName || (user.email ? user.email.split('@')[0] : 'User')}</p>
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}
             </p>

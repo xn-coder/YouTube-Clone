@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: { params: { channelId: string
     return { title: 'Channel Not Found' };
   }
   return { 
-    title: `${channel.name} - VideoVerse`,
-    description: channel.description || `Videos from ${channel.name} on VideoVerse.`
+    title: `${channel.name} - Youtube Clone`,
+    description: channel.description || `Videos from ${channel.name} on Youtube Clone.`
   };
 }
 
@@ -119,5 +119,3 @@ export default async function ChannelPage({ params }: { params: { channelId: str
     </div>
   );
 }
-
-    
