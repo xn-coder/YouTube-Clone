@@ -1,16 +1,16 @@
+
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { VideoGrid } from '@/components/VideoGrid';
 import { SubscriptionToggle } from '@/components/video/SubscriptionToggle';
 import { getChannelDetails, getChannelVideos } from '@/lib/data'; 
-import type { Channel, Video } from '@/types';
-import { UserCircle, CheckCircle, Rss } from 'lucide-react';
+import type { Channel } from '@/types';
+import { UserCircle, CheckCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { notFound } from 'next/navigation';
 import { formatNumber } from '@/lib/utils';
 import type { Metadata } from 'next';
+import { ClientVideoFeed } from '@/components/ClientVideoFeed';
 
 export async function generateMetadata({ params }: { params: { channelId: string } }): Promise<Metadata> {
   const channel = await getChannelDetails(params.channelId);
@@ -30,7 +30,7 @@ export default async function ChannelPage({ params }: { params: { channelId: str
     notFound();
   }
 
-  const videos = await getChannelVideos(params.channelId);
+  const initialVideoFeed = await getChannelVideos(params.channelId, 20);
 
   return (
     <div className="container mx-auto px-0 sm:px-4 lg:px-6">
@@ -40,9 +40,9 @@ export default async function ChannelPage({ params }: { params: { channelId: str
           <Image 
             src={channel.bannerUrl} 
             alt={`${channel.name} banner`} 
-            fill // Changed from layout="fill"
-            style={{ objectFit: 'cover' }} // Replaced objectFit="cover"
-            priority // Preload banner image
+            fill
+            style={{ objectFit: 'cover' }}
+            priority
             data-ai-hint="channel banner actual"
           />
         ) : (
@@ -62,10 +62,11 @@ export default async function ChannelPage({ params }: { params: { channelId: str
             <div className="flex-grow pt-12 sm:pt-0">
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{channel.name}</h1>
-                <CheckCircle className="h-6 w-6 text-primary" />
+                {/* Assuming verified status isn't directly available, can be added if API provides */}
+                {/* <CheckCircle className="h-6 w-6 text-primary" /> */}
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                {formatNumber(channel.subscribers)} subscribers &bull; {videos.length > 0 ? `${formatNumber(videos.length)} videos` : 'No videos'} 
+                {formatNumber(channel.subscribers)} subscribers &bull; {initialVideoFeed.totalResults !== undefined ? `${formatNumber(initialVideoFeed.totalResults)} videos` : 'Loading videos...'} 
               </p>
               {channel.description && (
                 <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
@@ -89,7 +90,14 @@ export default async function ChannelPage({ params }: { params: { channelId: str
           <TabsTrigger value="about">About</TabsTrigger>
         </TabsList>
         <TabsContent value="videos">
-          <VideoGrid videos={videos} className="py-6" />
+          <ClientVideoFeed
+            key={params.channelId} // Ensure re-fetch if channelId changes (though unlikely on same page)
+            initialVideos={initialVideoFeed.videos}
+            initialNextPageToken={initialVideoFeed.nextPageToken}
+            fetchVideosFunction={(maxResults, pageToken) => getChannelVideos(params.channelId, maxResults, pageToken)}
+            maxResultsPerPage={20}
+            gridClassName="py-6"
+          />
         </TabsContent>
         <TabsContent value="playlists">
           <div className="py-6 text-center text-muted-foreground">Playlists feature coming soon.</div>
@@ -104,12 +112,12 @@ export default async function ChannelPage({ params }: { params: { channelId: str
             
             <h3 className="text-xl font-semibold mt-4">Details</h3>
             <p>Subscribers: {formatNumber(channel.subscribers)}</p>
-            {/* Additional details can be added if available from API */}
-            {/* <p>Email: contact@{channel.name.toLowerCase().replace(/\s/g, '')}.com</p> */}
-            {/* <p>Location: Tech City, Internet</p> */}
+            <p>Total Videos: {initialVideoFeed.totalResults !== undefined ? formatNumber(initialVideoFeed.totalResults) : 'N/A'}</p>
           </div>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
+
+    

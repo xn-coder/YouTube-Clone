@@ -33,9 +33,6 @@ export default async function WatchPage({ params }: { params: { videoId: string 
 
   if (!cleanVideoId) {
     notFound();
-    // notFound() throws an error, so further rendering stops.
-    // Adding a return null or placeholder div isn't strictly needed if notFound always halts.
-    // However, to be explicit for static analysis or different Next.js versions:
     return null; 
   }
 
@@ -46,10 +43,10 @@ export default async function WatchPage({ params }: { params: { videoId: string 
     return null;
   }
 
-  // Fetch comments and recommendations in parallel
-  const [comments, recommendedVideos] = await Promise.all([
-    getCommentsByVideoId(cleanVideoId),
-    getRecommendedVideos(cleanVideoId) 
+  // Fetch initial comments and recommendations
+  const [initialCommentsData, initialRecommendedVideosData] = await Promise.all([
+    getCommentsByVideoId(cleanVideoId, 20), // Fetch initial 20 comments
+    getRecommendedVideos(cleanVideoId, 10) // Fetch initial 10 recommendations
   ]);
 
   return (
@@ -99,15 +96,22 @@ export default async function WatchPage({ params }: { params: { videoId: string 
             
             <Separator className="my-6" />
             
-            <CommentsList videoId={cleanVideoId} initialComments={comments} />
+            {/* CommentsList will handle its own pagination if we enhance it later */}
+            <CommentsList videoId={cleanVideoId} initialComments={initialCommentsData.comments} />
           </div>
         </div>
         
         {/* Sidebar: Recommended videos */}
-        <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit"> {/* Sticky top for desktop */}
-          <RecommendedVideos videos={recommendedVideos} />
+        <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit">
+          <RecommendedVideos 
+            initialVideos={initialRecommendedVideosData.videos} 
+            initialNextPageToken={initialRecommendedVideosData.nextPageToken}
+            videoId={cleanVideoId}
+          />
         </div>
       </div>
     </div>
   );
 }
+
+    
