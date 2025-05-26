@@ -43,10 +43,10 @@ export default async function ChannelPage({ params }: { params: { channelId: str
             fill
             style={{ objectFit: 'cover' }}
             priority
-            data-ai-hint="channel banner actual"
+            data-ai-hint="channel banner"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-r from-muted via-card to-muted-foreground/20" data-ai-hint="channel banner placeholder gradient"></div>
+          <div className="w-full h-full bg-gradient-to-r from-muted via-card to-muted-foreground/20" data-ai-hint="banner gradient"></div>
         )}
       </div>
 
@@ -54,7 +54,7 @@ export default async function ChannelPage({ params }: { params: { channelId: str
       <div className="px-4 sm:px-0">
         <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 py-6 -mt-12 sm:-mt-16 md:-mt-20 relative z-10">
             <Avatar className="h-24 w-24 sm:h-32 sm:w-32 md:h-40 md:w-40 border-4 border-background shadow-lg">
-              <AvatarImage src={channel.avatarUrl} alt={channel.name} data-ai-hint="channel avatar large" />
+              <AvatarImage src={channel.avatarUrl} alt={channel.name} data-ai-hint="channel avatar" />
               <AvatarFallback>
                 <UserCircle className="h-full w-full text-muted-foreground" />
               </AvatarFallback>

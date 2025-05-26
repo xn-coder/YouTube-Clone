@@ -18,7 +18,7 @@ export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: Vide
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           loading="lazy"
-          data-ai-hint="youtube video player"
+          data-ai-hint="video player"
         ></iframe>
       </div>
     );
@@ -33,8 +33,8 @@ export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: Vide
           title={title}
           controls
           className="h-full w-full"
-          poster={posterUrl || `https://placehold.co/1280x720.png?text=${encodeURIComponent(title)}`}
-          data-ai-hint="video player direct"
+          poster={posterUrl || `https://placehold.co/1280x720.png`}
+          data-ai-hint="video player"
         >
           Your browser does not support the video tag.
         </video>
@@ -46,7 +46,7 @@ export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: Vide
   return (
      <div className="aspect-video w-full overflow-hidden rounded-xl bg-muted shadow-2xl flex items-center justify-center">
         <img 
-            src={posterUrl || `https://placehold.co/1280x720.png?text=${encodeURIComponent(title)}`} 
+            src={posterUrl || `https://placehold.co/1280x720.png`} 
             alt={title}
             className="h-full w-full object-cover"
             data-ai-hint="video poster"

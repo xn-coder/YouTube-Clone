@@ -56,7 +56,7 @@ export function SearchInput() {
     const fetchDebounced = setTimeout(async () => {
       setIsLoadingSuggestions(true);
       try {
-        const results = await searchVideos(searchQuery, 5); // Fetch 5 suggestions
+        const { videos: results } = await searchVideos(searchQuery, 5); // Fetch 5 suggestions
         setSuggestions(results);
         if (results.length > 0 && document.activeElement === inputRef.current) {
           setIsSuggestionsVisible(true);
@@ -135,7 +135,7 @@ export function SearchInput() {
                   fill
                   sizes="64px"
                   className="object-cover rounded-sm"
-                  data-ai-hint="video thumbnail suggestion"
+                  data-ai-hint="video thumbnail"
                 />
               </div>
               <span className="text-sm text-popover-foreground truncate flex-grow">{video.title}</span>

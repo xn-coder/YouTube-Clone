@@ -45,7 +45,7 @@ export async function fetchChannelData(channelIds: string[]): Promise<Map<string
       channelMap.set(item.id, {
         id: item.id,
         name: item.snippet?.title || 'Unknown Channel',
-        avatarUrl: item.snippet?.thumbnails?.default?.url || `https://placehold.co/40x40.png?text=${item.snippet?.title?.[0] || 'U'}`,
+        avatarUrl: item.snippet?.thumbnails?.default?.url || `https://placehold.co/40x40.png`,
         subscribers: parseInt(item.statistics?.subscriberCount || '0', 10),
         description: item.snippet?.description,
         bannerUrl: item.brandingSettings?.image?.bannerExternalUrl,
@@ -78,7 +78,7 @@ async function transformVideoItem(item: any, channelMap: Map<string, Channel>): 
     channel: channel || { 
       id: channelId || 'unknown', 
       name: item.snippet?.channelTitle || 'Unknown Channel', 
-      avatarUrl: `https://placehold.co/40x40.png?text=${item.snippet?.channelTitle?.[0] || 'U'}`, 
+      avatarUrl: `https://placehold.co/40x40.png`, 
       subscribers: 0 
     },
     views: parseInt(item.statistics?.viewCount || '0', 10),
@@ -134,7 +134,7 @@ export const getVideoById = async (id: string): Promise<Video | undefined> => {
   }
   try {
     const response = await fetch(
-      `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${trimmedId}&key=${API_KEY}`
+      `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${encodeURIComponent(trimmedId)}&key=${API_KEY}`
     );
     if (!response.ok) {
       const errorData = await response.json();

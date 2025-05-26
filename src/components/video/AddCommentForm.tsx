@@ -15,7 +15,7 @@ interface AddCommentFormProps {
 // Mock user for adding comments, as YouTube API doesn't allow unauthenticated comment posting.
 const mockCurrentUser = {
   name: 'Guest User',
-  avatarUrl: 'https://placehold.co/40x40.png?text=GU', // Placeholder for guest
+  avatarUrl: 'https://placehold.co/40x40.png', // Placeholder for guest
   channelId: undefined, 
 };
 

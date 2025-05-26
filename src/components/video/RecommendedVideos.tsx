@@ -180,7 +180,7 @@ export function RecommendedVideos({
               width={160}
               height={90}
               className="rounded-md object-cover aspect-video group-hover:opacity-80 transition-opacity"
-              data-ai-hint="video thumbnail small"
+              data-ai-hint="video thumbnail"
             />
             {video.duration && (
               <span className="absolute bottom-1 right-1 bg-black/75 text-white text-xs px-1 py-0.5 rounded-sm">

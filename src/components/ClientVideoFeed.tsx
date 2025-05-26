@@ -50,11 +50,24 @@ export function ClientVideoFeed({
 }: ClientVideoFeedProps) {
   const [videos, setVideos] = useState<Video[]>(initialVideos);
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(initialNextPageToken);
-  const [isLoading, setIsLoading] = useState<boolean>(initialVideos.length === 0 && !!initialNextPageToken); // True if initial load needed
+  
+  // isLoading is true if initialVideos are empty and we expect to fetch them.
+  // If initialVideos are empty AND initialNextPageToken is undefined, it means the server already determined no data.
+  const [isLoading, setIsLoading] = useState<boolean>(
+    initialVideos.length === 0 && initialNextPageToken !== undefined
+  );
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState<boolean>(!!initialNextPageToken || initialVideos.length === 0);
 
+  // hasMore is true if there's an initialNextPageToken, OR if initialVideos are empty AND initialNextPageToken is not explicitly undefined
+  // (meaning we should try an initial client fetch).
+  // If initialVideos are provided, hasMore is simply !!initialNextPageToken.
+  // If initialVideos are empty, hasMore is true IF initialNextPageToken is a string (more pages) or initialNextPageToken is not set at all (we haven't tried).
+  // hasMore is false if initialVideos are empty AND initialNextPageToken is explicitly undefined (server said no more).
+  const [hasMore, setHasMore] = useState<boolean>(
+    initialVideos.length > 0 ? !!initialNextPageToken : (initialNextPageToken !== undefined)
+  );
+  
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loaderRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,15 +100,23 @@ export function ClientVideoFeed({
 
 
   useEffect(() => {
-    // If initialVideos are not provided, fetch them on mount.
-    // This handles cases where the parent Server Component couldn't pre-fetch (e.g., search results).
-    if (initialVideos.length === 0 && !isLoading && hasMore && !error) {
+    // If initialVideos are empty, AND we initially determined there might be more (hasMore is true),
+    // AND we are not already in an error state, then perform the initial load.
+    if (initialVideos.length === 0 && isLoading && hasMore && !error) {
        loadVideos(true, initialNextPageToken);
     } else if (initialVideos.length > 0) {
-        setIsLoading(false); // Already have initial videos
-        setHasMore(!!initialNextPageToken);
+      // If initial videos were provided, we are not initially loading.
+      setIsLoading(false); 
+      // setHasMore is already correctly initialized based on initialNextPageToken if initialVideos are present.
+    } else {
+      // This case covers:
+      // 1. initialVideos is empty, but hasMore was false (server said no data, no token).
+      // 2. initialVideos is empty, but isLoading was false (shouldn't happen with new isLoading init).
+      // 3. Or there's an error.
+      // In any of these, ensure isLoading is false.
+      setIsLoading(false);
     }
-  }, []); // Ran once on mount
+  }, []); // Ran once on mount, dependencies on initial state are implicitly handled by useState.
 
   useEffect(() => {
     if (showLoadMoreButton || !hasMore || isLoadingMore) return;
@@ -123,7 +144,7 @@ export function ClientVideoFeed({
     };
   }, [hasMore, isLoadingMore, isLoading, nextPageToken, loadVideos, error, showLoadMoreButton]);
 
-  if (isLoading && videos.length === 0) {
+  if (isLoading && videos.length === 0) { // Show skeleton if loading initial videos and list is empty
     return <VideoFeedSkeleton count={maxResultsPerPage} className={gridClassName} />;
   }
   
@@ -131,7 +152,7 @@ export function ClientVideoFeed({
     return <p className="text-center text-destructive py-8">Error: {error}</p>;
   }
 
-  if (videos.length === 0 && !isLoading && !hasMore) {
+  if (videos.length === 0 && !isLoading && !hasMore) { // Show empty message if no videos, not loading, and no more to fetch
     return <p className="text-center text-muted-foreground py-8">{emptyMessage}</p>;
   }
 
