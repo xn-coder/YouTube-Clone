@@ -1,3 +1,4 @@
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { VideoPlayer } from '@/components/video/VideoPlayer';
@@ -13,7 +14,11 @@ import { formatNumber } from '@/lib/utils';
 import type { Metadata } from 'next';
 
 export async function generateMetadata({ params }: { params: { videoId: string } }): Promise<Metadata> {
-  const video = await getVideoById(params.videoId);
+  const cleanVideoId = params.videoId?.trim();
+  if (!cleanVideoId) {
+    return { title: 'Video Not Found' };
+  }
+  const video = await getVideoById(cleanVideoId);
   if (!video) {
     return { title: 'Video Not Found' };
   }
@@ -24,16 +29,27 @@ export async function generateMetadata({ params }: { params: { videoId: string }
 }
 
 export default async function WatchPage({ params }: { params: { videoId: string } }) {
-  const video = await getVideoById(params.videoId);
-  
-  if (!video) { // videoUrl is not directly from YT API for playback, it's for file links
+  const cleanVideoId = params.videoId?.trim();
+
+  if (!cleanVideoId) {
     notFound();
+    // notFound() throws an error, so further rendering stops.
+    // Adding a return null or placeholder div isn't strictly needed if notFound always halts.
+    // However, to be explicit for static analysis or different Next.js versions:
+    return null; 
+  }
+
+  const video = await getVideoById(cleanVideoId);
+  
+  if (!video) {
+    notFound();
+    return null;
   }
 
   // Fetch comments and recommendations in parallel
   const [comments, recommendedVideos] = await Promise.all([
-    getCommentsByVideoId(params.videoId),
-    getRecommendedVideos(params.videoId) // Pass current videoId to exclude it if logic supports
+    getCommentsByVideoId(cleanVideoId),
+    getRecommendedVideos(cleanVideoId) 
   ]);
 
   return (
@@ -41,10 +57,8 @@ export default async function WatchPage({ params }: { params: { videoId: string 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Main content: Video player and details */}
         <div className="lg:w-2/3">
-          {/* For YouTube, we'd use an iframe embed player. For now, using placeholder URL or direct link if available. */}
           <VideoPlayer 
-            // videoUrl={video.videoUrl} // This would be a direct file link if we had one
-            youtubeVideoId={video.id} // Pass video ID for potential iframe embed
+            youtubeVideoId={video.id}
             title={video.title} 
             posterUrl={video.highQualityThumbnailUrl || video.thumbnailUrl}
           />
@@ -85,7 +99,7 @@ export default async function WatchPage({ params }: { params: { videoId: string 
             
             <Separator className="my-6" />
             
-            <CommentsList videoId={params.videoId} initialComments={comments} />
+            <CommentsList videoId={cleanVideoId} initialComments={comments} />
           </div>
         </div>
         

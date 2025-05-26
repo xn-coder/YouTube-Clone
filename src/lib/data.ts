@@ -1,3 +1,4 @@
+
 import type { Video, Comment, Channel } from '@/types';
 import { formatNumber, parseISO8601Duration, formatPublishedAt } from '@/lib/utils';
 
@@ -39,7 +40,6 @@ async function transformVideoItem(item: any, channelMap: Map<string, Channel>): 
   let channel = channelMap.get(channelId);
 
   if (!channel && channelId) {
-    // Fetch if not in map (e.g. for getVideoById if channelMap isn't pre-populated for it)
     const singleChannelMap = await fetchChannelData([channelId]);
     channel = singleChannelMap.get(channelId);
   }
@@ -63,7 +63,6 @@ async function transformVideoItem(item: any, channelMap: Map<string, Channel>): 
     duration: parseISO8601Duration(item.contentDetails?.duration),
     description: item.snippet?.description,
     likeCount: parseInt(item.statistics?.likeCount || '0', 10),
-    // videoUrl: actual video file, not standard from YT API search/videos list
   };
 }
 
@@ -95,42 +94,51 @@ export const getVideos = async (maxResults: number = 20): Promise<Video[]> => {
 };
 
 export const getVideoById = async (id: string): Promise<Video | undefined> => {
+  const trimmedId = id?.trim();
   if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning undefined for getVideoById.');
     return undefined;
   }
+  if (!trimmedId) {
+      console.warn('getVideoById called with empty or whitespace ID. Returning undefined.');
+      return undefined;
+  }
   try {
     const response = await fetch(
-      `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${id}&key=${API_KEY}`
+      `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${trimmedId}&key=${API_KEY}`
     );
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('YouTube API Error (getVideoById):', errorData.error?.message);
+      console.error(`YouTube API Error (getVideoById for ID: ${trimmedId}):`, errorData.error?.message);
       return undefined;
     }
     const data = await response.json();
     if (!data.items || data.items.length === 0) return undefined;
 
-    // Channel data will be fetched by transformVideoItem if not passed
     return transformVideoItem(data.items[0], new Map());
   } catch (error) {
-    console.error(`Error fetching video by ID (${id}):`, error);
+    console.error(`Error fetching video by ID (${trimmedId}):`, error);
     return undefined;
   }
 };
 
 export const getCommentsByVideoId = async (videoId: string, maxResults: number = 20): Promise<Comment[]> => {
+  const trimmedVideoId = videoId?.trim();
   if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning empty array for getCommentsByVideoId.');
     return [];
   }
+  if (!trimmedVideoId) {
+    console.warn('getCommentsByVideoId called with empty or whitespace videoId. Returning empty array.');
+    return [];
+  }
   try {
     const response = await fetch(
-      `${API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${videoId}&maxResults=${maxResults}&textFormat=html&key=${API_KEY}`
+      `${API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${trimmedVideoId}&maxResults=${maxResults}&textFormat=html&key=${API_KEY}`
     );
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('YouTube API Error (getCommentsByVideoId):', errorData.error?.message);
+      console.error(`YouTube API Error (getCommentsByVideoId for videoId: ${trimmedVideoId}):`, errorData.error?.message);
       return [];
     }
     const data = await response.json();
@@ -145,7 +153,7 @@ export const getCommentsByVideoId = async (videoId: string, maxResults: number =
           avatarUrl: topLevelComment?.authorProfileImageUrl || 'https://placehold.co/32x32.png',
           channelId: topLevelComment?.authorChannelId?.value,
         },
-        text: topLevelComment?.textDisplay || '', // textFormat=html returns HTML
+        text: topLevelComment?.textDisplay || '', 
         timestamp: formatPublishedAt(topLevelComment?.publishedAt),
         publishedAt: topLevelComment?.publishedAt,
         likes: parseInt(topLevelComment?.likeCount || '0', 10),
@@ -169,25 +177,26 @@ export const getCommentsByVideoId = async (videoId: string, maxResults: number =
       };
     }) || [];
   } catch (error) {
-    console.error(`Error fetching comments for video ID (${videoId}):`, error);
+    console.error(`Error fetching comments for video ID (${trimmedVideoId}):`, error);
     return [];
   }
 };
 
 export const searchVideos = async (query: string, maxResults: number = 20): Promise<Video[]> => {
+  const trimmedQuery = query?.trim();
   if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning empty array for searchVideos.');
     return [];
   }
-  if (!query) return getVideos(maxResults); // Or return empty array: return [];
+  if (!trimmedQuery) return getVideos(maxResults); 
   
   try {
     const searchResponse = await fetch(
-      `${API_BASE_URL}/search?part=snippet&q=${encodeURIComponent(query)}&maxResults=${maxResults}&type=video&key=${API_KEY}`
+      `${API_BASE_URL}/search?part=snippet&q=${encodeURIComponent(trimmedQuery)}&maxResults=${maxResults}&type=video&key=${API_KEY}`
     );
     if (!searchResponse.ok) {
       const errorData = await searchResponse.json();
-      console.error('YouTube API Error (searchVideos - search):', errorData.error?.message);
+      console.error(`YouTube API Error (searchVideos - search for query "${trimmedQuery}"):`, errorData.error?.message);
       return [];
     }
     const searchData = await searchResponse.json();
@@ -201,8 +210,7 @@ export const searchVideos = async (query: string, maxResults: number = 20): Prom
     );
     if (!videosResponse.ok) {
       const errorData = await videosResponse.json();
-      console.error('YouTube API Error (searchVideos - videos):', errorData.error?.message);
-      // Fallback: try to construct partial video data from search results
+      console.error(`YouTube API Error (searchVideos - videos for query "${trimmedQuery}"):`, errorData.error?.message);
       const channelIdsFromSearch = [...new Set(searchData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
       const channelMapFromSearch = await fetchChannelData(channelIdsFromSearch);
       return Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapFromSearch)));
@@ -213,22 +221,20 @@ export const searchVideos = async (query: string, maxResults: number = 20): Prom
     const channelIds = [...new Set(videosData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
     const channelMap = await fetchChannelData(channelIds);
 
-    // Preserve order from search results
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
     const orderedVideos = videoIds.map((id: string) => videosById.get(id)).filter(Boolean);
 
     return Promise.all(orderedVideos.map((item: any) => transformVideoItem(item, channelMap)));
   } catch (error) {
-    console.error(`Error searching videos for query "${query}":`, error);
+    console.error(`Error searching videos for query "${trimmedQuery}":`, error);
     return [];
   }
 };
 
-// Example channel IDs for subscriptions. Replace with actual IDs or a different logic.
 const SUBSCRIBED_CHANNEL_IDS = [
-  'UC_x5XG1OV2P6uZZ5FSM9Ttw', // Google Developers
-  'UCBJycsmduvYEL83R_U4JriQ', // Marques Brownlee (MKBHD)
-  'UCsT0YIqwnpJCM-mx7-gSA4Q', // Fireship
+  'UC_x5XG1OV2P6uZZ5FSM9Ttw', 
+  'UCBJycsmduvYEL83R_U4JriQ', 
+  'UCsT0YIqwnpJCM-mx7-gSA4Q', 
 ];
 
 export const getSubscribedVideos = async (maxResultsPerChannel: number = 5): Promise<Video[]> => {
@@ -264,9 +270,8 @@ export const getSubscribedVideos = async (maxResultsPerChannel: number = 5): Pro
         console.error(`YouTube API Error (getSubscribedVideos for channel ${channelId}):`, errorData.error?.message);
       }
     }
-    // Sort by published date, newest first
     allSubscribedVideos.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-    return allSubscribedVideos.slice(0, 20); // Overall limit
+    return allSubscribedVideos.slice(0, 20);
   } catch (error) {
     console.error('Error fetching subscribed videos:', error);
     return [];
@@ -274,17 +279,26 @@ export const getSubscribedVideos = async (maxResultsPerChannel: number = 5): Pro
 };
 
 export const getRecommendedVideos = async (videoId: string, maxResults: number = 10): Promise<Video[]> => {
+  const trimmedVideoId = videoId?.trim();
   if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning empty array for getRecommendedVideos.');
     return [];
   }
+  if (!trimmedVideoId) {
+    console.warn('getRecommendedVideos called with empty or whitespace videoId. Returning empty array.');
+    return [];
+  }
   try {
     const searchResponse = await fetch(
-      `${API_BASE_URL}/search?part=snippet&relatedToVideoId=${videoId}&type=video&maxResults=${maxResults}&key=${API_KEY}`
+      `${API_BASE_URL}/search?part=snippet&relatedToVideoId=${trimmedVideoId}&type=video&maxResults=${maxResults}&key=${API_KEY}`
     );
     if (!searchResponse.ok) {
       const errorData = await searchResponse.json();
-      console.error('YouTube API Error (getRecommendedVideos - search):', errorData.error?.message);
+      let detailedMessage = errorData.error?.message || 'Unknown API error';
+      if (errorData.error?.errors && Array.isArray(errorData.error.errors) && errorData.error.errors.length > 0) {
+        detailedMessage += ' Details: ' + errorData.error.errors.map((e: any) => `(${e.reason}) ${e.message}`).join(', ');
+      }
+      console.error(`YouTube API Error (getRecommendedVideos - search for videoId: ${trimmedVideoId}): ${detailedMessage}`);
       return [];
     }
     const searchData = await searchResponse.json();
@@ -298,7 +312,7 @@ export const getRecommendedVideos = async (videoId: string, maxResults: number =
     );
     if (!videosResponse.ok) {
         const errorData = await videosResponse.json();
-        console.error('YouTube API Error (getRecommendedVideos - videos):', errorData.error?.message);
+        console.error(`YouTube API Error (getRecommendedVideos - videos for relatedToVideoId: ${trimmedVideoId}):`, errorData.error?.message);
         const channelIdsFromSearch = [...new Set(searchData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
         const channelMapFromSearch = await fetchChannelData(channelIdsFromSearch);
         return Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapFromSearch)));
@@ -309,46 +323,52 @@ export const getRecommendedVideos = async (videoId: string, maxResults: number =
     const channelIds = [...new Set(videosData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
     const channelMap = await fetchChannelData(channelIds);
     
-    // Preserve order from recommendation results
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
     const orderedVideos = videoIds.map((id: string) => videosById.get(id)).filter(Boolean);
 
     return Promise.all(orderedVideos.map((item: any) => transformVideoItem(item, channelMap)));
   } catch (error) {
-    console.error(`Error fetching recommended videos for video ID (${videoId}):`, error);
+    console.error(`Error fetching recommended videos for video ID (${trimmedVideoId}):`, error);
     return [];
   }
 };
 
-
-// This function will be used by the channel page.
 export async function getChannelDetails(channelId: string): Promise<Channel | undefined> {
+  const trimmedChannelId = channelId?.trim();
   if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning undefined for getChannelDetails.');
     return undefined;
   }
+  if (!trimmedChannelId) {
+    console.warn('getChannelDetails called with empty or whitespace channelId. Returning undefined.');
+    return undefined;
+  }
   try {
-    const channelMap = await fetchChannelData([channelId]);
-    return channelMap.get(channelId);
+    const channelMap = await fetchChannelData([trimmedChannelId]);
+    return channelMap.get(trimmedChannelId);
   } catch (error) {
-    console.error(`Error fetching channel details for ID (${channelId}):`, error);
+    console.error(`Error fetching channel details for ID (${trimmedChannelId}):`, error);
     return undefined;
   }
 }
 
-// This function will be used by the channel page to get its videos.
 export async function getChannelVideos(channelId: string, maxResults: number = 20): Promise<Video[]> {
+   const trimmedChannelId = channelId?.trim();
    if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning empty array for getChannelVideos.');
     return [];
   }
+  if (!trimmedChannelId) {
+    console.warn('getChannelVideos called with empty or whitespace channelId. Returning empty array.');
+    return [];
+  }
   try {
     const searchResponse = await fetch(
-      `${API_BASE_URL}/search?part=snippet&channelId=${channelId}&maxResults=${maxResults}&order=date&type=video&key=${API_KEY}`
+      `${API_BASE_URL}/search?part=snippet&channelId=${trimmedChannelId}&maxResults=${maxResults}&order=date&type=video&key=${API_KEY}`
     );
     if (!searchResponse.ok) {
       const errorData = await searchResponse.json();
-      console.error(`YouTube API Error (getChannelVideos - search for channel ${channelId}):`, errorData.error?.message);
+      console.error(`YouTube API Error (getChannelVideos - search for channel ${trimmedChannelId}):`, errorData.error?.message);
       return [];
     }
     const searchData = await searchResponse.json();
@@ -362,23 +382,21 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
     );
      if (!videosResponse.ok) {
         const errorData = await videosResponse.json();
-        console.error(`YouTube API Error (getChannelVideos - videos for channel ${channelId}):`, errorData.error?.message);
-        // Fallback with partial data from search
-        const channelMapForSearch = await fetchChannelData([channelId]); // only one channelId
+        console.error(`YouTube API Error (getChannelVideos - videos for channel ${trimmedChannelId}):`, errorData.error?.message);
+        const channelMapForSearch = await fetchChannelData([trimmedChannelId]); 
         return Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapForSearch)));
     }
     const videosData = await videosResponse.json();
     if(!videosData.items) return [];
 
-    const channelMap = await fetchChannelData([channelId]); // We only need this channel's data
+    const channelMap = await fetchChannelData([trimmedChannelId]); 
 
-    // Preserve order from search results (date order)
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
     const orderedVideos = videoIds.map((id: string) => videosById.get(id)).filter(Boolean);
 
     return Promise.all(orderedVideos.map((item: any) => transformVideoItem(item, channelMap)));
   } catch (error) {
-    console.error(`Error fetching videos for channel ID (${channelId}):`, error);
+    console.error(`Error fetching videos for channel ID (${trimmedChannelId}):`, error);
     return [];
   }
 }
