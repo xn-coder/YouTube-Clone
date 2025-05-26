@@ -12,7 +12,7 @@ export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: Vide
       <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl">
         <iframe
           className="h-full w-full"
-          src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=0&rel=0`} // autoplay=0, rel=0 to hide related videos from other channels
+          src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&rel=0`} // autoplay=1, rel=0 to hide related videos
           title={title}
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -32,6 +32,7 @@ export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: Vide
           src={videoUrl}
           title={title}
           controls
+          autoPlay // Added autoPlay for HTML5 video
           className="h-full w-full"
           poster={posterUrl || `https://placehold.co/1280x720.png`}
           data-ai-hint="video player"
@@ -45,8 +46,8 @@ export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: Vide
   // Fallback if no video source is available
   return (
      <div className="aspect-video w-full overflow-hidden rounded-xl bg-muted shadow-2xl flex items-center justify-center">
-        <img 
-            src={posterUrl || `https://placehold.co/1280x720.png`} 
+        <img
+            src={posterUrl || `https://placehold.co/1280x720.png`}
             alt={title}
             className="h-full w-full object-cover"
             data-ai-hint="video poster"
