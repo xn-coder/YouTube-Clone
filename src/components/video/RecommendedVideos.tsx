@@ -1,73 +1,116 @@
 
-'use client'; // Making this client component to handle its own potential pagination if needed
+'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Video } from '@/types';
 import { formatNumber } from '@/lib/utils';
-import { getRecommendedVideos } from '@/lib/data'; // Assuming we might call it from here
+import { getRecommendedVideos } from '@/lib/data';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface RecommendedVideosProps {
-  initialVideos: Video[];
-  initialNextPageToken?: string;
-  videoId: string; // Needed if we want to fetch more related to this video
-  maxTotalItems?: number; // Max items to show, to prevent excessive loading
+  videoId: string;
+  maxTotalItems?: number;
 }
 
-const RecommendedVideoItemSkeleton = () => (
-  <div className="flex gap-2.5">
-    <Skeleton className="w-40 h-[90px] flex-shrink-0 rounded-md" />
-    <div className="flex-grow min-w-0 space-y-1">
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-3 w-1/2" />
-      <Skeleton className="h-3 w-1/3" />
-    </div>
-  </div>
+const RecommendedVideoItemSkeleton = ({ count = 5 }: { count?: number }) => (
+  <>
+    {[...Array(count)].map((_, i) => (
+      <div key={i} className="flex gap-2.5">
+        <Skeleton className="w-40 h-[90px] flex-shrink-0 rounded-md" />
+        <div className="flex-grow min-w-0 space-y-1">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+          <Skeleton className="h-3 w-1/3" />
+        </div>
+      </div>
+    ))}
+  </>
 );
 
 export function RecommendedVideos({ 
-  initialVideos, 
-  initialNextPageToken, 
   videoId,
-  maxTotalItems = 15 // Default max recommended videos to show
+  maxTotalItems = 15 
 }: RecommendedVideosProps) {
-  const [videos, setVideos] = useState<Video[]>(initialVideos);
-  const [nextPageToken, setNextPageToken] = useState<string | undefined>(initialNextPageToken);
+  const { user, loading: authLoading } = useAuth();
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
+  const [isLoadingInitial, setIsLoadingInitial] = useState<boolean>(true);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-  const [hasMore, setHasMore] = useState<boolean>(!!initialNextPageToken && initialVideos.length < maxTotalItems);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loaderRef = useRef<HTMLDivElement | null>(null);
   
-  const loadMoreRecommended = useCallback(async () => {
-    if (!nextPageToken || videos.length >= maxTotalItems) {
+  const loadRecommended = useCallback(async (isInitialLoad: boolean, currentToken?: string) => {
+    if (!user) { // Don't fetch if user is not logged in
+      setIsLoadingInitial(false);
+      setIsLoadingMore(false);
+      setHasMore(false);
+      setVideos([]);
+      return;
+    }
+    
+    if (videos.length >= maxTotalItems && !isInitialLoad) {
       setHasMore(false);
       return;
     }
-    setIsLoadingMore(true);
+
+    if (isInitialLoad) setIsLoadingInitial(true);
+    else setIsLoadingMore(true);
+    setError(null);
+
     try {
-      const result = await getRecommendedVideos(videoId, 5, nextPageToken); // Fetch 5 more at a time
-      setVideos(prev => [...prev, ...result.videos]);
+      // Fetch 5 for initial, 5 for subsequent loads, up to maxTotalItems
+      const resultsToFetch = isInitialLoad ? Math.min(5, maxTotalItems) : Math.min(5, maxTotalItems - videos.length);
+      if (resultsToFetch <= 0) {
+          setHasMore(false);
+          if (isInitialLoad) setIsLoadingInitial(false); else setIsLoadingMore(false);
+          return;
+      }
+
+      const result = await getRecommendedVideos(videoId, resultsToFetch, currentToken);
+      
+      setVideos(prev => isInitialLoad ? result.videos : [...prev, ...result.videos]);
       setNextPageToken(result.nextPageToken);
-      setHasMore(!!result.nextPageToken && (videos.length + result.videos.length) < maxTotalItems);
-    } catch (error) {
-      console.error("Failed to load more recommended videos:", error);
-      setHasMore(false); // Stop trying on error
+      const newTotalVideos = isInitialLoad ? result.videos.length : videos.length + result.videos.length;
+      setHasMore(!!result.nextPageToken && newTotalVideos < maxTotalItems && result.videos.length > 0);
+
+    } catch (err) {
+      console.error("Failed to load recommended videos:", err);
+      setError(err instanceof Error ? err.message : "Failed to load videos.");
+      setHasMore(false);
+    } finally {
+      if (isInitialLoad) setIsLoadingInitial(false);
+      else setIsLoadingMore(false);
     }
-    setIsLoadingMore(false);
-  }, [nextPageToken, videoId, videos.length, maxTotalItems]);
+  }, [videoId, user, maxTotalItems, videos.length]); // Added videos.length to dependencies
 
   useEffect(() => {
-    setVideos(initialVideos);
-    setNextPageToken(initialNextPageToken);
-    setHasMore(!!initialNextPageToken && initialVideos.length < maxTotalItems);
-  }, [initialVideos, initialNextPageToken, maxTotalItems]);
+    // Effect to trigger initial load when user status is known and they are logged in
+    if (!authLoading && user) {
+        if(videos.length === 0 && hasMore){ // only load if videos are empty and hasMore potentially
+             loadRecommended(true, undefined);
+        }
+    } else if (!authLoading && !user) {
+      // User is not logged in, clear videos and stop loading states
+      setVideos([]);
+      setNextPageToken(undefined);
+      setHasMore(false);
+      setIsLoadingInitial(false);
+      setIsLoadingMore(false);
+      setError(null);
+    }
+  }, [authLoading, user, loadRecommended, videos.length, hasMore]);
+
 
   useEffect(() => {
-    if (!hasMore || isLoadingMore) return;
+    // Intersection observer for loading more
+    if (!hasMore || isLoadingMore || isLoadingInitial || !user) return;
 
     const currentLoaderRef = loaderRef.current;
     if (observerRef.current) observerRef.current.disconnect();
@@ -75,7 +118,7 @@ export function RecommendedVideos({
     observerRef.current = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
-          loadMoreRecommended();
+          loadRecommended(false, nextPageToken);
         }
       },
       { threshold: 0.5 }
@@ -88,11 +131,41 @@ export function RecommendedVideos({
     return () => {
       if (observerRef.current) observerRef.current.disconnect();
     };
-  }, [hasMore, isLoadingMore, loadMoreRecommended]);
+  }, [hasMore, isLoadingMore, isLoadingInitial, nextPageToken, loadRecommended, user]);
 
 
-  if (!videos || videos.length === 0 && !hasMore && !isLoadingMore) {
-    return <p className="text-muted-foreground">No recommendations available.</p>;
+  if (authLoading) {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-lg font-semibold text-foreground mb-3">Recommended</h3>
+        <RecommendedVideoItemSkeleton count={3} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="space-y-3 py-4 text-center">
+        <p className="text-sm text-muted-foreground">Please log in to see recommended videos.</p>
+      </div>
+    );
+  }
+  
+  if (isLoadingInitial && videos.length === 0) {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-lg font-semibold text-foreground mb-3">Recommended</h3>
+        <RecommendedVideoItemSkeleton count={5} />
+      </div>
+    );
+  }
+  
+  if (error && videos.length === 0) {
+     return <p className="text-muted-foreground text-sm">Could not load recommendations.</p>;
+  }
+
+  if (videos.length === 0 && !isLoadingInitial && !hasMore) {
+    return <p className="text-muted-foreground text-sm">No recommendations available for this video.</p>;
   }
 
   return (
@@ -122,12 +195,13 @@ export function RecommendedVideos({
           </div>
         </Link>
       ))}
-      {isLoadingMore && <RecommendedVideoItemSkeleton />}
-      {hasMore && !isLoadingMore && (
-        <div ref={loaderRef} className="h-10" /> // Invisible loader trigger
+      {isLoadingMore && <RecommendedVideoItemSkeleton count={2}/>}
+      {hasMore && !isLoadingMore && user && (
+        <div ref={loaderRef} className="h-10" /> 
+      )}
+      {!hasMore && videos.length > 0 && videos.length >= maxTotalItems && (
+        <p className="text-center text-xs text-muted-foreground py-3">Showing top {maxTotalItems} recommendations.</p>
       )}
     </div>
   );
 }
-
-    

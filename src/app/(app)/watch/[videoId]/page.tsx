@@ -5,7 +5,7 @@ import { VideoPlayer } from '@/components/video/VideoPlayer';
 import { CommentsList } from '@/components/video/CommentsList';
 import { SubscriptionToggle } from '@/components/video/SubscriptionToggle';
 import { RecommendedVideos } from '@/components/video/RecommendedVideos';
-import { getVideoById, getCommentsByVideoId, getRecommendedVideos } from '@/lib/data';
+import { getVideoById, getCommentsByVideoId } from '@/lib/data';
 import { ThumbsUp, ThumbsDown, Share2, ListPlus, UserCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { notFound } from 'next/navigation';
@@ -43,11 +43,9 @@ export default async function WatchPage({ params }: { params: { videoId: string 
     return null;
   }
 
-  // Fetch initial comments and recommendations
-  const [initialCommentsData, initialRecommendedVideosData] = await Promise.all([
-    getCommentsByVideoId(cleanVideoId, 20), // Fetch initial 20 comments
-    getRecommendedVideos(cleanVideoId, 10) // Fetch initial 10 recommendations
-  ]);
+  // Fetch initial comments
+  // Recommended videos will be fetched client-side by the RecommendedVideos component if user is logged in
+  const initialCommentsData = await getCommentsByVideoId(cleanVideoId, 20);
 
   return (
     <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6">
@@ -96,7 +94,6 @@ export default async function WatchPage({ params }: { params: { videoId: string 
             
             <Separator className="my-6" />
             
-            {/* CommentsList will handle its own pagination if we enhance it later */}
             <CommentsList videoId={cleanVideoId} initialComments={initialCommentsData.comments} />
           </div>
         </div>
@@ -104,14 +101,10 @@ export default async function WatchPage({ params }: { params: { videoId: string 
         {/* Sidebar: Recommended videos */}
         <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit">
           <RecommendedVideos 
-            initialVideos={initialRecommendedVideosData.videos} 
-            initialNextPageToken={initialRecommendedVideosData.nextPageToken}
-            videoId={cleanVideoId}
+            videoId={cleanVideoId} // Pass videoId, component will fetch if user logged in
           />
         </div>
       </div>
     </div>
   );
 }
-
-    
