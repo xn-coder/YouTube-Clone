@@ -1,0 +1,79 @@
+
+'use client';
+
+import { useFormState, useFormStatus } from 'react-dom';
+import { useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { signInWithEmail, type AuthFormState } from '@/app/actions/auth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { Spinner } from '@/components/Spinner';
+import { Logo } from '@/components/Logo';
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? <Spinner className="mr-2" /> : null}
+      Sign In
+    </Button>
+  );
+}
+
+export default function LoginPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const initialState: AuthFormState = { message: '', success: false };
+  const [state, formAction] = useFormState(signInWithEmail, initialState);
+
+  useEffect(() => {
+    if (state.message) {
+      toast({
+        title: state.success ? 'Success' : 'Error',
+        description: state.message,
+        variant: state.success ? 'default' : 'destructive',
+      });
+    }
+    if (state.success) {
+      // Wait for toast to show then redirect
+      setTimeout(() => router.push('/'), 1000); 
+    }
+  }, [state, toast, router]);
+
+  return (
+    <div className="flex flex-col items-center space-y-6">
+      <Logo />
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="text-2xl">Sign In</CardTitle>
+          <CardDescription>Enter your email and password to access your account.</CardDescription>
+        </CardHeader>
+        <form action={formAction}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" type="email" placeholder="m@example.com" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" name="password" type="password" required />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <SubmitButton />
+            <p className="text-center text-sm text-muted-foreground">
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="font-medium text-primary hover:underline">
+                Sign Up
+              </Link>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
+  );
+}
