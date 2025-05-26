@@ -5,7 +5,8 @@ import { auth } from '@/lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
-  signOut 
+  signOut,
+  sendEmailVerification // Import sendEmailVerification
 } from 'firebase/auth';
 import type { ZodError } from 'zod';
 
@@ -32,11 +33,29 @@ export async function signUpWithEmail(prevState: AuthFormState, formData: FormDa
   }
 
   try {
-    await createUserWithEmailAndPassword(auth, email, password);
-    return { message: 'Sign up successful! Redirecting...', success: true };
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    // Send verification email
+    if (userCredential.user) {
+      await sendEmailVerification(userCredential.user);
+      return { 
+        message: 'Sign up successful! A verification email has been sent. Please check your inbox.', 
+        success: true 
+      };
+    }
+    // This case should ideally not be reached if createUserWithEmailAndPassword succeeds
+    return { message: 'Sign up successful, but failed to send verification email.', success: true };
   } catch (error: any) {
     console.error("Sign up error:", error);
-    return { message: error.message || 'Sign up failed. Please try again.', success: false };
+    // Provide more specific error messages if available
+    let errorMessage = 'Sign up failed. Please try again.';
+    if (error.code === 'auth/email-already-in-use') {
+      errorMessage = 'This email address is already in use. Please try a different email or log in.';
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = 'The password is too weak. Please use a stronger password.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    return { message: errorMessage, success: false };
   }
 }
 
@@ -49,11 +68,25 @@ export async function signInWithEmail(prevState: AuthFormState, formData: FormDa
   }
 
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    // Optional: Check if email is verified before considering sign-in fully successful for redirection
+    // if (userCredential.user && !userCredential.user.emailVerified) {
+    //   return { message: 'Please verify your email address before logging in. A new verification email has been sent.', success: false };
+    //   // Optionally, resend verification email here:
+    //   // await sendEmailVerification(userCredential.user); 
+    // }
     return { message: 'Sign in successful! Redirecting...', success: true };
   } catch (error: any) {
     console.error("Sign in error:", error);
-    return { message: error.message || 'Sign in failed. Invalid credentials or user not found.', success: false };
+    let errorMessage = 'Sign in failed. Invalid credentials or user not found.';
+    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid email or password. Please try again.';
+    } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.';
+    } else if (error.message) {
+        errorMessage = error.message;
+    }
+    return { message: errorMessage, success: false };
   }
 }
 
