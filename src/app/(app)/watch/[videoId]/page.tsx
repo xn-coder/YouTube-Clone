@@ -1,7 +1,7 @@
 
-'use client'; // Make this a client component to use useEffect and useRef
+'use client'; 
 
-import { useEffect, useRef, useState, use } from 'react'; // Import use
+import { useEffect, useRef, useState, use } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { VideoPlayer } from '@/components/video/VideoPlayer';
@@ -10,13 +10,13 @@ import { RecommendedVideos } from '@/components/video/RecommendedVideos';
 import { getVideoById } from '@/lib/data';
 import { ThumbsUp, ThumbsDown, Share2, ListPlus, UserCircle, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { notFound, useRouter } from 'next/navigation'; // useRouter can be used client-side
+import { notFound, useRouter } from 'next/navigation'; 
 import Link from 'next/link';
 import { formatNumber } from '@/lib/utils';
-import type { Video, AppComment as CommentType } from '@/types'; // Assuming Comment type is exported as CommentType
+import type { Video } from '@/types'; 
 import { useAuth } from '@/contexts/AuthContext';
 import { recordWatchEvent } from '@/app/actions/user';
-import { AppCommentsList } from '@/components/video/AppCommentsList'; // For app-specific comments
+import { AppCommentsList } from '@/components/video/AppCommentsList'; 
 import { toggleSaveVideo, isUserVideoSaved } from '@/app/actions/userInteractions';
 import { useToast } from '@/hooks/use-toast';
 
@@ -28,7 +28,6 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
   const { toast } = useToast();
 
   const [video, setVideo] = useState<Video | null | undefined>(undefined);
-  const [initialCommentsData, setInitialCommentsData] = useState<{ comments: CommentType[]; nextPageToken?: string } | null>(null); // This might not be needed if AppCommentsList fetches its own
   const [isLoading, setIsLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,15 +47,11 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
       try {
         const videoData = await getVideoById(cleanVideoId);
         if (!videoData) {
-          setVideo(null);
+          setVideo(null); 
           setIsLoading(false);
           return;
         }
         setVideo(videoData);
-
-        // AppCommentsList will fetch its own comments, so no need to fetch here unless specifically designed otherwise
-        // const comments = await getCommentsByVideoId(cleanVideoId, 20); // This fetches YouTube API comments
-        // setInitialCommentsData(comments); // Not needed for AppCommentsList
 
         if (user && videoData) {
           const savedStatus = await isUserVideoSaved(user.uid, videoData.id);
@@ -65,14 +60,14 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
 
       } catch (error) {
         console.error("Error fetching video details:", error);
-        setVideo(null);
+        setVideo(null); 
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [cleanVideoId, user]); // Added user to dependency array for isUserVideoSaved
+  }, [cleanVideoId, user]); 
 
 
   useEffect(() => {
@@ -80,7 +75,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
       if (!authLoading && user && video && video.id && !hasRecordedWatchEvent.current) {
         console.log("WatchPage: Attempting to record watch event for video:", video.id, "User:", user.uid);
         try {
-          hasRecordedWatchEvent.current = true;
+          hasRecordedWatchEvent.current = true; 
 
           const result = await recordWatchEvent(user.uid, {
             videoId: video.id,
@@ -101,11 +96,11 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
                 "Example rule for watchHistory: match /users/{userId}/watchHistory/{historyEntryId} { allow read, write: if request.auth != null && request.auth.uid == userId; }"
               );
             }
-            // hasRecordedWatchEvent.current = false; // Optionally reset to allow retries
+            // hasRecordedWatchEvent.current = false; 
           }
         } catch (error) {
           console.error("WatchPage: Error calling recordWatchEvent:", error);
-          // hasRecordedWatchEvent.current = false; // Optionally reset to allow retries
+          // hasRecordedWatchEvent.current = false; 
         }
       } else {
         if (authLoading) console.log("WatchPage: Auth still loading, skipping watch event record attempt.");
@@ -115,7 +110,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
       }
     };
 
-    if (video && !authLoading) { // Only attempt to record if video data is present and auth is resolved
+    if (video && !authLoading) { 
       recordView();
     }
   }, [user, authLoading, video]);
@@ -161,8 +156,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
         toast({ title: "Shared!", description: "Video link shared." });
       } catch (error) {
         console.error('Error sharing:', error);
-        // Fallback to copy link if navigator.share fails or is cancelled
-        copyLinkToClipboard();
+        copyLinkToClipboard(); 
       }
     } else {
       copyLinkToClipboard();
@@ -181,7 +175,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
   };
 
 
-  if (isLoading || (authLoading && video === undefined)) {
+  if (isLoading || (authLoading && video === undefined)) { 
     return (
       <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6 flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -189,12 +183,12 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
     );
   }
 
-  if (video === null) {
+  if (video === null) { 
      notFound();
-     return null;
+     return null; 
   }
 
-  if (!video) {
+  if (!video) { 
       notFound();
       return null;
   }
@@ -249,6 +243,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
 
             <Separator className="my-6" />
 
+            {/* App-specific comments section */}
             {cleanVideoId && (
               <AppCommentsList 
                 videoId={cleanVideoId} 
@@ -259,6 +254,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
         </div>
 
         <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit">
+          {/* Ensure cleanVideoId is passed for recommendations */}
           {cleanVideoId && <RecommendedVideos videoId={cleanVideoId} />}
         </div>
       </div>
@@ -266,3 +262,4 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
   );
 }
 
+    
