@@ -24,21 +24,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.warn("AuthProvider: Firebase appears to be misconfigured. User authentication may not work correctly. Please check your .env.local file and Firebase project settings.");
       }
       setLoading(false); // Stop loading, user will remain null or as per last known state if any
-      // Optionally, you could try to sign the user out here if robust error handling is needed:
-      // auth.signOut().catch(err => console.error("Error signing out potentially stale user:", err));
       return; // Do not subscribe to onAuthStateChanged if Firebase is likely misconfigured
     }
 
-    // Ensure auth object and onAuthStateChanged are available
     if (auth && typeof auth.onAuthStateChanged === 'function') {
       const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        if (currentUser) {
+          console.log('AuthContext: User detected by onAuthStateChanged. UID:', currentUser.uid, 'Email:', currentUser.email);
+        } else {
+          console.log('AuthContext: No user detected by onAuthStateChanged (user is null).');
+        }
         setUser(currentUser);
         setLoading(false);
       });
       // Cleanup subscription on unmount
       return () => unsubscribe();
     } else {
-      // This case means auth object itself is not valid, likely due to major init failure
        if (typeof window !== 'undefined') {
         console.error("AuthProvider: Firebase auth service is not available. Cannot track authentication state.");
       }
