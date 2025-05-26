@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useFormStatus } from 'react'; // Updated import
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -28,7 +28,7 @@ export default function SignupPage() {
   const router = useRouter();
   const { toast } = useToast();
   const initialState: AuthFormState = { message: '', success: false };
-  const [state, formAction] = useFormState(signUpWithEmail, initialState);
+  const [state, formAction] = useActionState(signUpWithEmail, initialState); // Updated usage
 
   useEffect(() => {
     if (state.message) {
