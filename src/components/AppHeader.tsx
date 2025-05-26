@@ -1,10 +1,11 @@
+
 import { Logo } from '@/components/Logo';
 import { SearchInput } from '@/components/SearchInput';
 import { UserNav } from '@/components/UserNav';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { AppSidebarNav } from './AppSidebarNav'; // Assume AppSidebarNav provides nav items
+import { AppSidebarNav } from './AppSidebarNav'; 
 
 export function AppHeader() {
   return (
@@ -24,12 +25,12 @@ export function AppHeader() {
           </Sheet>
           <Logo />
         </div>
-        <div className="hidden flex-1 justify-center px-8 md:flex">
+        <div className="hidden flex-1 justify-center px-8 md:flex relative"> {/* Added relative for suggestions positioning */}
           <SearchInput />
         </div>
         <UserNav />
       </div>
-      <div className="md:hidden p-2 border-t">
+      <div className="md:hidden p-2 border-t relative"> {/* Added relative for suggestions positioning */}
         <SearchInput />
       </div>
     </header>
