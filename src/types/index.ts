@@ -1,4 +1,5 @@
 
+
 export interface Channel {
   id: string;
   name: string;
@@ -23,28 +24,35 @@ export interface Video {
   likeCount?: number; // Store as number
 }
 
-export interface Comment {
-  id:string;
+export interface AppComment {
+  id: string; // Firestore document ID
   videoId: string;
-  user: {
-    name: string;
-    avatarUrl: string;
-    channelId?: string; // YouTube comment author can be a channel
-  };
-  text: string; // HTML content for comments
-  timestamp: string; // Formatted string
-  publishedAt: string; // ISO date string
+  userId: string;
+  userName: string;
+  userAvatarUrl: string | null;
+  text: string; // HTML content, or plain text if sanitized before storing
+  createdAt: Date; // JS Date object, converted from Firestore Timestamp
+  updatedAt: Date; // JS Date object
   likes: number;
-  replyCount?: number;
-  replies?: Comment[]; // For nested replies if fetched
+  // replies?: AppComment[]; // For nested replies if implemented
 }
 
 export interface WatchHistoryItem {
-  id: string; // Firestore document ID
+  id: string; // Firestore document ID (usually videoId if we overwrite, or unique if multiple views)
   videoId: string;
   videoTitle: string;
   channelId: string;
   channelName: string;
   thumbnailUrl: string;
   watchedAt: Date; // JS Date object, converted from Firestore Timestamp
+}
+
+export interface SavedVideoItem {
+  id: string; // videoId can serve as a unique ID within the array
+  videoId: string;
+  title: string;
+  thumbnailUrl: string;
+  channelId: string;
+  channelName: string;
+  savedAt: Date; // JS Date object, from Firestore Timestamp
 }

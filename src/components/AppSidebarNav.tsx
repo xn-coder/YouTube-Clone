@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Flame, Youtube, UserCircle, ChevronRight, History } from 'lucide-react'; // Added History icon
+import { Home, Flame, Youtube, UserCircle, ChevronRight, History, ListVideo } from 'lucide-react'; // Added History, ListVideo icons
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -16,12 +16,13 @@ import { useAuth } from '@/contexts/AuthContext';
 const mainNavItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/trending', label: 'Trending', icon: Flame },
-  { href: '/subscriptions', label: 'Subscriptions', icon: Youtube }, // Renamed for consistency
+  { href: '/subscriptions', label: 'Subscriptions', icon: Youtube },
 ];
 
-const userNavItems = [ // Added for authenticated users
-    { href: '/history', label: 'History', icon: History },
-]
+const userNavItems = [ 
+  { href: '/history', label: 'History', icon: History },
+  { href: '/saved', label: 'Saved Videos', icon: ListVideo }, // Added Saved Videos
+];
 
 interface AppSidebarNavProps {
   isMobile?: boolean;
@@ -55,7 +56,8 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
 
       setIsLoadingSubscriptions(true);
       try {
-        const previews = await getSubscribedChannelPreviews(user.uid);
+        // Ensure user.uid is passed, default to empty string if user is somehow null
+        const previews = await getSubscribedChannelPreviews(user.uid || '');
         setSubscribedChannels(previews);
       } catch (error) {
         console.error("Failed to load subscriptions for sidebar:", error);
@@ -63,7 +65,12 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
       }
       setIsLoadingSubscriptions(false);
     }
-    fetchSubscriptions();
+    if (user) { // Only fetch if user is definitively logged in
+      fetchSubscriptions();
+    } else if (!authLoading && !user) { // If auth is done loading and there's no user
+      setSubscribedChannels([]);
+      setIsLoadingSubscriptions(false);
+    }
   }, [user, authLoading]);
 
   const displayedSubscriptions = subscribedChannels.slice(0, 5);
@@ -85,13 +92,14 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
         </Button>
       ))}
 
+      {/* Conditional rendering for user-specific items */}
       {!authLoading && user && (
         <>
           <Separator className="my-3" />
           {userNavItems.map((item) => (
             <Button
               key={item.label}
-              variant={pathname === item.href ? 'secondary' : 'ghost'}
+              variant={pathname.startsWith(item.href) ? 'secondary' : 'ghost'} // Use startsWith for active state on sub-routes
               className="justify-start"
               asChild
             >
@@ -145,10 +153,22 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
             </>
           )}
           {!isLoadingSubscriptions && subscribedChannels.length === 0 && !isMobile && (
-            <div className="px-3 py-2">
+             <div className="px-3 py-2">
                 <p className="text-xs text-muted-foreground">Subscribe to channels to see them here.</p>
             </div>
           )}
+        </>
+      )}
+      {/* Display login prompt in sidebar if not mobile, not loading, and no user */}
+      {!isMobile && !authLoading && !user && (
+        <>
+          <Separator className="my-3" />
+          <div className="px-3 py-2">
+            <p className="text-sm text-muted-foreground mb-2">Log in to see your history, saved videos, and subscriptions.</p>
+            <Button asChild className="w-full">
+              <Link href="/login">Log In</Link>
+            </Button>
+          </div>
         </>
       )}
       {isMobile && user && <Separator className="my-3" />} 
