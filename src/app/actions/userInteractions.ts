@@ -17,7 +17,8 @@ import {
   arrayRemove,
   Timestamp,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  setDoc
 } from 'firebase/firestore';
 
 // COMMENTS
@@ -102,40 +103,55 @@ export async function toggleSaveVideo(
   const userDocRef = doc(db, 'users', userId);
 
   try {
-    const userDocSnap = await getDoc(userDocRef);
-    if (!userDocSnap.exists()) {
-      // Should not happen if user is created on signup, but handle defensively
-      await setDoc(userDocRef, { savedVideos: [] }, { merge: true });
-    }
-
-    const userData = userDocSnap.data();
-    const savedVideosArray: Omit<SavedVideoItem, 'id'>[] = userData?.savedVideos || [];
-    
-    const existingIndex = savedVideosArray.findIndex(v => v.videoId === videoData.videoId);
-
-    const videoItemToStore = {
+    // Prepare the video item with a client-generated timestamp for array operations
+    const videoItemForStorage = {
       videoId: videoData.videoId,
       title: videoData.title,
       thumbnailUrl: videoData.thumbnailUrl,
       channelId: videoData.channelId,
       channelName: videoData.channelName,
-      savedAt: serverTimestamp() // Use Firestore server timestamp
+      savedAt: new Date() // Use JavaScript Date; Firestore converts to Timestamp
     };
 
-    if (existingIndex > -1) {
-      // Video exists, remove it
-      await updateDoc(userDocRef, {
-        savedVideos: arrayRemove(savedVideosArray[existingIndex]) // Firestore needs the exact object to remove
-      });
-      return { success: true, isSaved: false };
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+      const userData = userDocSnap.data();
+      // Ensure savedVideos is treated as an array, even if missing or null initially
+      // The items in savedVideosArray will have `savedAt` as Firestore Timestamps when read
+      const savedVideosArray: Array<Omit<SavedVideoItem, 'id' | 'savedAt'> & { savedAt: Date | Timestamp }> = userData.savedVideos || [];
+      
+      const existingVideoInArray = savedVideosArray.find(v => v.videoId === videoData.videoId);
+
+      if (existingVideoInArray) {
+        // Video exists, remove it. Pass the object as it was read from Firestore.
+        await updateDoc(userDocRef, {
+          savedVideos: arrayRemove(existingVideoInArray)
+        });
+        return { success: true, isSaved: false };
+      } else {
+        // Video doesn't exist in array, add it.
+        // videoItemForStorage uses `new Date()` for `savedAt`.
+        await updateDoc(userDocRef, {
+          savedVideos: arrayUnion(videoItemForStorage)
+        });
+        return { success: true, isSaved: true };
+      }
     } else {
-      // Video doesn't exist, add it
-      await updateDoc(userDocRef, {
-        savedVideos: arrayUnion(videoItemToStore)
+      // User document doesn't exist, create it and add the video.
+      // This path implies we are saving the video for the first time for this user.
+      await setDoc(userDocRef, { 
+        savedVideos: [videoItemForStorage],
+        // Consider initializing other user fields here if this is the first time the doc is created,
+        // e.g., email, uid, createdAt (using serverTimestamp() here is fine for setDoc).
+        // For simplicity, assuming `users` docs are primarily for `subscribedChannelIds` and `savedVideos` for now.
+        // If user profile details are created elsewhere (e.g., on signup), merge:true could be used
+        // await setDoc(userDocRef, { savedVideos: [videoItemForStorage] }, { merge: true });
       });
       return { success: true, isSaved: true };
     }
-  } catch (error: any) {
+  } catch (error: any)
+{
     console.error('Error toggling save video:', error);
     return { success: false, isSaved: false, error: error.message || 'Failed to update saved videos.' };
   }
