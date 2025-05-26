@@ -1,6 +1,6 @@
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 
 // These should be loaded from .env.local
@@ -50,6 +50,18 @@ let db: Firestore;
 if (app && app.name !== '[uninitialized]') {
   try {
     auth = getAuth(app);
+    // Explicitly set persistence to localStorage
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => {
+        if (typeof window !== 'undefined') {
+          console.info("%cFirebase Auth persistence set to localStorage.", "color: blue;");
+        }
+      })
+      .catch((error) => {
+        if (typeof window !== 'undefined') {
+          console.error("Error setting Firebase Auth persistence to localStorage:", error);
+        }
+      });
     db = getFirestore(app);
   } catch (error) {
     console.error("Firebase Error: Failed to initialize Auth or Firestore services after app initialization. This might be due to a misconfiguration that wasn't caught earlier.", error);
