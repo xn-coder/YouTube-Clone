@@ -3,29 +3,24 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { VideoGrid } from '@/components/VideoGrid';
 import { SubscriptionToggle } from '@/components/video/SubscriptionToggle';
-import { mockChannels, mockVideos } from '@/lib/data'; // Using mock data directly for simplicity
+import { getChannelDetails, getChannelVideos } from '@/lib/data'; 
 import type { Channel, Video } from '@/types';
-import { UserCircle, CheckCircle } from 'lucide-react';
+import { UserCircle, CheckCircle, Rss } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { notFound } from 'next/navigation';
+import { formatNumber } from '@/lib/utils';
+import type { Metadata } from 'next';
 
-// Helper to get channel details
-async function getChannelDetails(channelId: string): Promise<Channel | undefined> {
-  return mockChannels.find(c => c.id === channelId);
-}
-
-// Helper to get videos for a channel
-async function getChannelVideos(channelId: string): Promise<Video[]> {
-  return mockVideos.filter(v => v.channel.id === channelId);
-}
-
-export async function generateMetadata({ params }: { params: { channelId: string } }) {
+export async function generateMetadata({ params }: { params: { channelId: string } }): Promise<Metadata> {
   const channel = await getChannelDetails(params.channelId);
   if (!channel) {
     return { title: 'Channel Not Found' };
   }
-  return { title: `${channel.name} - VideoVerse` };
+  return { 
+    title: `${channel.name} - VideoVerse`,
+    description: channel.description || `Videos from ${channel.name} on VideoVerse.`
+  };
 }
 
 export default async function ChannelPage({ params }: { params: { channelId: string } }) {
@@ -37,23 +32,22 @@ export default async function ChannelPage({ params }: { params: { channelId: str
 
   const videos = await getChannelVideos(params.channelId);
 
-  const formatSubscribers = (count: number) => {
-    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M subscribers`;
-    if (count >= 1000) return `${(count / 1000).toFixed(1)}K subscribers`;
-    return `${count} subscribers`;
-  };
-
   return (
     <div className="container mx-auto px-0 sm:px-4 lg:px-6">
       {/* Channel Banner */}
       <div className="h-32 sm:h-48 md:h-64 bg-muted relative">
-        <Image 
-          src={`https://placehold.co/1200x300.png`} 
-          alt={`${channel.name} banner`} 
-          layout="fill" 
-          objectFit="cover" 
-          data-ai-hint="channel banner"
-        />
+        {channel.bannerUrl ? (
+          <Image 
+            src={channel.bannerUrl} 
+            alt={`${channel.name} banner`} 
+            fill // Changed from layout="fill"
+            style={{ objectFit: 'cover' }} // Replaced objectFit="cover"
+            priority // Preload banner image
+            data-ai-hint="channel banner actual"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-r from-muted via-card to-muted-foreground/20" data-ai-hint="channel banner placeholder gradient"></div>
+        )}
       </div>
 
       {/* Channel Info */}
@@ -71,11 +65,13 @@ export default async function ChannelPage({ params }: { params: { channelId: str
                 <CheckCircle className="h-6 w-6 text-primary" />
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                {formatSubscribers(channel.subscribers)} &bull; {videos.length} videos
+                {formatNumber(channel.subscribers)} subscribers &bull; {videos.length > 0 ? `${formatNumber(videos.length)} videos` : 'No videos'} 
               </p>
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                Welcome to the official channel of {channel.name}. Tech reviews, tutorials, and more!
-              </p>
+              {channel.description && (
+                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                  {channel.description}
+                </p>
+              )}
             </div>
             <div className="flex-shrink-0 mt-4 sm:mt-0">
               <SubscriptionToggle channel={channel} />
@@ -85,7 +81,6 @@ export default async function ChannelPage({ params }: { params: { channelId: str
       
       <Separator className="my-2" />
 
-      {/* Tabs for Videos, Playlists, About etc. */}
       <Tabs defaultValue="videos" className="w-full px-4 sm:px-0">
         <TabsList className="mb-4">
           <TabsTrigger value="videos">Videos</TabsTrigger>
@@ -103,13 +98,15 @@ export default async function ChannelPage({ params }: { params: { channelId: str
           <div className="py-6 text-center text-muted-foreground">Community feature coming soon.</div>
         </TabsContent>
         <TabsContent value="about">
-          <div className="py-6 prose dark:prose-invert max-w-none">
+          <div className="py-6 prose dark:prose-invert max-w-none prose-sm sm:prose-base">
             <h3 className="text-xl font-semibold">Description</h3>
-            <p>This is the official channel for {channel.name}. We are passionate about creating high-quality content about all things tech. From in-depth reviews of the latest gadgets to helpful tutorials and thought-provoking discussions on the future of technology, we aim to inform, educate, and entertain.</p>
-            <p>Join our community of tech enthusiasts and stay updated with our latest videos by subscribing!</p>
+            <p>{channel.description || `Welcome to the official channel of ${channel.name}.`}</p>
+            
             <h3 className="text-xl font-semibold mt-4">Details</h3>
-            <p>Email: contact@{channel.name.toLowerCase().replace(/\s/g, '')}.com</p>
-            <p>Location: Tech City, Internet</p>
+            <p>Subscribers: {formatNumber(channel.subscribers)}</p>
+            {/* Additional details can be added if available from API */}
+            {/* <p>Email: contact@{channel.name.toLowerCase().replace(/\s/g, '')}.com</p> */}
+            {/* <p>Location: Tech City, Internet</p> */}
           </div>
         </TabsContent>
       </Tabs>

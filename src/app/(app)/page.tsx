@@ -2,7 +2,7 @@ import { getVideos } from '@/lib/data';
 import { VideoGrid } from '@/components/VideoGrid';
 
 export default async function HomePage() {
-  const videos = await getVideos();
+  const videos = await getVideos(20); // Fetch 20 most popular videos
 
   return (
     <div className="container mx-auto px-4 py-6 sm:px-6 lg:px-8">

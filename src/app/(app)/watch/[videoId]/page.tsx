@@ -9,26 +9,31 @@ import { ThumbsUp, ThumbsDown, Share2, ListPlus, UserCircle } from 'lucide-react
 import { Separator } from '@/components/ui/separator';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { formatNumber } from '@/lib/utils';
+import type { Metadata } from 'next';
 
-export async function generateMetadata({ params }: { params: { videoId: string } }) {
+export async function generateMetadata({ params }: { params: { videoId: string } }): Promise<Metadata> {
   const video = await getVideoById(params.videoId);
   if (!video) {
     return { title: 'Video Not Found' };
   }
-  return { title: `${video.title} - VideoVerse` };
+  return { 
+    title: `${video.title} - VideoVerse`,
+    description: video.description || `Watch ${video.title} on VideoVerse.`,
+  };
 }
 
 export default async function WatchPage({ params }: { params: { videoId: string } }) {
   const video = await getVideoById(params.videoId);
   
-  if (!video || !video.videoUrl) {
+  if (!video) { // videoUrl is not directly from YT API for playback, it's for file links
     notFound();
   }
 
   // Fetch comments and recommendations in parallel
   const [comments, recommendedVideos] = await Promise.all([
     getCommentsByVideoId(params.videoId),
-    getRecommendedVideos(params.videoId)
+    getRecommendedVideos(params.videoId) // Pass current videoId to exclude it if logic supports
   ]);
 
   return (
@@ -36,7 +41,13 @@ export default async function WatchPage({ params }: { params: { videoId: string 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Main content: Video player and details */}
         <div className="lg:w-2/3">
-          <VideoPlayer videoUrl={video.videoUrl} title={video.title} />
+          {/* For YouTube, we'd use an iframe embed player. For now, using placeholder URL or direct link if available. */}
+          <VideoPlayer 
+            // videoUrl={video.videoUrl} // This would be a direct file link if we had one
+            youtubeVideoId={video.id} // Pass video ID for potential iframe embed
+            title={video.title} 
+            posterUrl={video.highQualityThumbnailUrl || video.thumbnailUrl}
+          />
           
           <div className="mt-4">
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">{video.title}</h1>
@@ -50,23 +61,27 @@ export default async function WatchPage({ params }: { params: { videoId: string 
                   </Avatar>
                 </Link>
                 <div>
-                  <Link href={`/channel/${video.channel.id}`} className="text-sm font-medium text-foreground hover:text-primary">{video.channel.name}</Link>
-                  <p className="text-xs text-muted-foreground">{video.views} &bull; {video.uploadDate}</p>
+                  <Link href={`/channel/${video.channel.id}`} className="text-sm font-medium text-foreground hover:text-primary line-clamp-1" title={video.channel.name}>
+                    {video.channel.name}
+                  </Link>
+                  <p className="text-xs text-muted-foreground">{formatNumber(video.views)} views &bull; {video.uploadDate}</p>
                 </div>
                 <SubscriptionToggle channel={video.channel} />
               </div>
               
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm"><ThumbsUp className="mr-2 h-4 w-4" /> Like</Button>
-                <Button variant="outline" size="sm"><ThumbsDown className="mr-2 h-4 w-4" /> Dislike</Button>
-                <Button variant="outline" size="sm"><Share2 className="mr-2 h-4 w-4" /> Share</Button>
-                <Button variant="outline" size="sm"><ListPlus className="mr-2 h-4 w-4" /> Save</Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" size="sm"><ThumbsUp className="mr-1.5 h-4 w-4" /> {video.likeCount !== undefined ? formatNumber(video.likeCount) : 'Like'}</Button>
+                <Button variant="outline" size="sm"><ThumbsDown className="mr-1.5 h-4 w-4" /> Dislike</Button>
+                <Button variant="outline" size="sm"><Share2 className="mr-1.5 h-4 w-4" /> Share</Button>
+                <Button variant="outline" size="sm"><ListPlus className="mr-1.5 h-4 w-4" /> Save</Button>
               </div>
             </div>
             
-            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm text-foreground whitespace-pre-wrap">{video.description || "No description available."}</p>
-            </div>
+            {video.description && (
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg max-h-60 overflow-y-auto">
+                <p className="text-sm text-foreground whitespace-pre-wrap">{video.description}</p>
+              </div>
+            )}
             
             <Separator className="my-6" />
             

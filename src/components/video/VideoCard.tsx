@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { Video } from '@/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UserCircle } from 'lucide-react';
+import { formatNumber } from '@/lib/utils';
 
 interface VideoCardProps {
   video: Video;
@@ -10,18 +11,23 @@ interface VideoCardProps {
 
 export function VideoCard({ video }: VideoCardProps) {
   return (
-    <div className="group"> {/* Root element is a div with "group" for hover effects */}
+    <div className="group flex flex-col"> {/* Ensure flex column for structure */}
       {/* Link for the thumbnail image - navigates to video */}
-      <Link href={`/watch/${video.id}`} className="block cursor-pointer">
-        <div className="mb-2 overflow-hidden rounded-lg shadow-md aspect-video">
+      <Link href={`/watch/${video.id}`} className="block cursor-pointer mb-2">
+        <div className="overflow-hidden rounded-lg shadow-md aspect-video relative">
           <Image
-            src={video.thumbnailUrl}
+            src={video.thumbnailUrl || 'https://placehold.co/360x200.png'}
             alt={video.title}
-            width={360}
-            height={200}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            fill // Use fill for responsive aspect ratio
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
             data-ai-hint="video thumbnail"
           />
+          {video.duration && (
+            <span className="absolute bottom-1 right-1 bg-black/75 text-white text-xs px-1.5 py-0.5 rounded-sm">
+              {video.duration}
+            </span>
+          )}
         </div>
       </Link>
 
@@ -48,13 +54,14 @@ export function VideoCard({ video }: VideoCardProps) {
           <Link 
             href={`/channel/${video.channel.id}`} 
             className="mt-1 text-xs text-muted-foreground hover:text-primary hover:underline line-clamp-1"
+            title={video.channel.name}
           >
             {video.channel.name}
           </Link>
           
           {/* Views and upload date - not a link */}
           <div className="mt-0.5 text-xs text-muted-foreground">
-            <span>{video.views}</span> &bull; <span>{video.uploadDate}</span>
+            <span>{formatNumber(video.views)} views</span> &bull; <span>{video.uploadDate}</span>
           </div>
         </div>
       </div>

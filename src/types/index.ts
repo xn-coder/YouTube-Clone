@@ -2,30 +2,38 @@ export interface Channel {
   id: string;
   name: string;
   avatarUrl: string;
-  subscribers: number;
+  subscribers: number; // Store as number for potential calculations, format for display
+  description?: string;
+  bannerUrl?: string;
 }
 
 export interface Video {
   id: string;
   title: string;
-  thumbnailUrl: string;
-  channel: Channel;
-  views: string; // e.g., "1M views"
-  uploadDate: string; // e.g., "2 weeks ago"
-  duration: string; // e.g., "10:32"
+  thumbnailUrl: string; // Default/Medium quality for cards
+  highQualityThumbnailUrl?: string; // Higher quality for player poster
+  channel: Channel; // Simplified, will be populated carefully
+  views: number; // Store as number
+  uploadDate: string; // Formatted string like "2 weeks ago"
+  publishedAt: string; // ISO date string from API
+  duration: string; // Formatted string like "10:32"
   description?: string;
-  videoUrl?: string; // URL to the actual video file or stream
+  videoUrl?: string; // Actual video file (not directly from YT API for embedding usually)
+  likeCount?: number; // Store as number
 }
 
 export interface Comment {
-  id: string;
+  id:string;
   videoId: string;
   user: {
     name: string;
     avatarUrl: string;
+    channelId?: string; // YouTube comment author can be a channel
   };
-  text: string;
-  timestamp: string; // e.g., "3 days ago"
+  text: string; // HTML content for comments
+  timestamp: string; // Formatted string
+  publishedAt: string; // ISO date string
   likes: number;
-  replies?: Comment[];
+  replyCount?: number;
+  replies?: Comment[]; // For nested replies if fetched
 }
