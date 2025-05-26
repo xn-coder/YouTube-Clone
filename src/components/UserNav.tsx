@@ -32,6 +32,8 @@ export function UserNav() {
       await signOut(auth); // Use client-side signOut
       toast({ title: 'Logged out', description: 'You have been successfully logged out.' });
       router.push('/'); // Redirect to home
+      // Optionally, force a reload to ensure all state is cleared if needed:
+      // router.refresh(); // or window.location.reload(); but router.refresh() is smoother
     } catch (error: any) {
       console.error("Sign out error:", error);
       toast({ title: 'Logout Failed', description: error.message || 'Sign out failed.', variant: 'destructive' });
@@ -61,14 +63,25 @@ export function UserNav() {
     );
   }
 
+  const getInitials = (email?: string | null) => {
+    if (email && typeof email === 'string' && email.length > 0) {
+      return email.charAt(0).toUpperCase();
+    }
+    return <UserCircle className="h-8 w-8" />;
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={user.photoURL || "https://placehold.co/40x40.png"} alt={user.displayName || user.email || "User avatar"} data-ai-hint="user avatar" />
-            <AvatarFallback>
-              <UserCircle className="h-8 w-8" />
+            <AvatarImage 
+              src={user.photoURL || undefined} // Pass undefined if photoURL is null/empty to trigger fallback
+              alt={user.displayName || user.email || "User avatar"} 
+              data-ai-hint="user avatar" 
+            />
+            <AvatarFallback className="text-lg font-semibold">
+              {user.photoURL ? null : getInitials(user.email)}
             </AvatarFallback>
           </Avatar>
         </Button>

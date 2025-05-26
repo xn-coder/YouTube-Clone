@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { getSubscribedChannelPreviews, type ChannelPreview } from '@/app/actions/user';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
+import { useAuth } from '@/contexts/AuthContext';
 
 const mainNavItems = [
   { href: '/', label: 'Home', icon: Home },
@@ -33,35 +33,35 @@ const SubscriptionItemSkeleton = () => (
 
 export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProps) {
   const pathname = usePathname();
-  const { user, loading: authLoading } = useAuth(); // Get user and auth loading state
+  const { user, loading: authLoading } = useAuth();
   const [subscribedChannels, setSubscribedChannels] = useState<ChannelPreview[]>([]);
   const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(true);
 
   useEffect(() => {
     async function fetchSubscriptions() {
-      if (authLoading) { // Don't fetch if auth state is still loading
-        setIsLoadingSubscriptions(true); // Keep showing loading state
+      if (authLoading) {
+        setIsLoadingSubscriptions(true);
         return;
       }
-      if (!user) { // If user is not logged in, clear subscriptions and stop loading
+      if (!user) {
         setSubscribedChannels([]);
         setIsLoadingSubscriptions(false);
         return;
       }
 
-      // User is logged in, proceed to fetch subscriptions
       setIsLoadingSubscriptions(true);
       try {
-        const previews = await getSubscribedChannelPreviews();
+        // Pass user.uid to fetch user-specific subscriptions
+        const previews = await getSubscribedChannelPreviews(user.uid);
         setSubscribedChannels(previews);
       } catch (error) {
         console.error("Failed to load subscriptions for sidebar:", error);
-        setSubscribedChannels([]); // Clear on error
+        setSubscribedChannels([]);
       }
       setIsLoadingSubscriptions(false);
     }
     fetchSubscriptions();
-  }, [user, authLoading]); // Re-run when user or authLoading state changes
+  }, [user, authLoading]);
 
   const displayedSubscriptions = subscribedChannels.slice(0, 5);
   const hasMoreSubscriptions = subscribedChannels.length > 5;
@@ -82,7 +82,6 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
         </Button>
       ))}
 
-      {/* Conditional rendering for the entire subscriptions section */}
       {!authLoading && user && (
         <>
           <Separator className="my-3" />
@@ -135,7 +134,6 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
           )}
         </>
       )}
-      {/* For mobile sheet, we might still want the separator if they were to log in and it appears */}
       {isMobile && user && <Separator className="my-3" />} 
     </nav>
   );

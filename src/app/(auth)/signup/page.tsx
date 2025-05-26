@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/Spinner';
 import { Logo } from '@/components/Logo';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase'; // Import db
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore'; // Import Firestore functions
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignupPage() {
@@ -22,7 +23,6 @@ export default function SignupPage() {
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    // If user is already logged in and auth is not loading, redirect them
     if (user && !authLoading) {
       router.push('/');
     }
@@ -59,14 +59,31 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       if (userCredential.user) {
         await sendEmailVerification(userCredential.user);
+
+        // Create user document in Firestore
+        try {
+          const userDocRef = doc(db, 'users', userCredential.user.uid);
+          await setDoc(userDocRef, {
+            uid: userCredential.user.uid,
+            email: userCredential.user.email,
+            displayName: userCredential.user.displayName || '', // Firebase User obj might not have displayName immediately
+            photoURL: userCredential.user.photoURL || '',
+            subscribedChannelIds: [], // Initialize with empty subscriptions
+            createdAt: new Date().toISOString(),
+          });
+          console.log("User document created/updated in Firestore for UID:", userCredential.user.uid);
+        } catch (firestoreError) {
+          console.error("Error creating/updating user document in Firestore:", firestoreError);
+          // This error shouldn't block the signup success toast, but should be logged
+          // Optionally, you could inform the user that some profile setup failed.
+        }
+
         toast({
           title: 'Success!',
           description: 'Account created. A verification email has been sent. Please check your inbox and then log in.',
         });
-        // Don't automatically sign in. User should verify then log in.
         router.push('/login'); 
       } else {
-        // This case should ideally not be reached if createUserWithEmailAndPassword succeeds
          toast({
           title: 'Account Created',
           description: 'Account created, but failed to send verification email. Please try logging in.',
@@ -104,7 +121,6 @@ export default function SignupPage() {
     }
   };
   
-  // Prevent rendering form if already logged in and redirecting
   if (user && !authLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">

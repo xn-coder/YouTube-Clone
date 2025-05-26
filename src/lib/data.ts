@@ -3,6 +3,8 @@
 
 import type { Video, Comment, Channel } from '@/types';
 import { formatNumber, parseISO8601Duration, formatPublishedAt } from '@/lib/utils';
+import { db } from '@/lib/firebase'; // Import Firestore db instance
+import { doc, getDoc } from 'firebase/firestore';
 
 const API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 const API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
@@ -19,8 +21,6 @@ interface PaginatedCommentsResponse {
   totalResults?: number;
 }
 
-// Helper to fetch channel details (including avatar and subscribers)
-// Exported to be used by other server actions like in user.ts
 export async function fetchChannelData(channelIds: string[]): Promise<Map<string, Channel>> {
   if (!API_KEY) {
     console.warn('YOUTUBE_API_KEY is not set. Channel data may be incomplete.');
@@ -35,7 +35,6 @@ export async function fetchChannelData(channelIds: string[]): Promise<Map<string
     if (!response.ok) {
       const errorData = await response.json();
       console.error('YouTube API Error (fetchChannelData):', errorData.error?.message);
-      // Return an empty map or a map with partial data if some IDs failed
       return new Map(); 
     }
     const data = await response.json();
@@ -45,7 +44,7 @@ export async function fetchChannelData(channelIds: string[]): Promise<Map<string
       channelMap.set(item.id, {
         id: item.id,
         name: item.snippet?.title || 'Unknown Channel',
-        avatarUrl: item.snippet?.thumbnails?.default?.url || `https://placehold.co/40x40.png`,
+        avatarUrl: item.snippet?.thumbnails?.default?.url || 'https://placehold.co/40x40.png',
         subscribers: parseInt(item.statistics?.subscriberCount || '0', 10),
         description: item.snippet?.description,
         bannerUrl: item.brandingSettings?.image?.bannerExternalUrl,
@@ -54,16 +53,15 @@ export async function fetchChannelData(channelIds: string[]): Promise<Map<string
     return channelMap;
   } catch (error) {
     console.error('Network or other error in fetchChannelData:', error);
-    return new Map(); // Return empty map on critical error
+    return new Map();
   }
 }
 
-// Helper to transform YouTube API video item to our Video type
 async function transformVideoItem(item: any, channelMap: Map<string, Channel>): Promise<Video> {
   const channelId = item.snippet?.channelId;
   let channel = channelMap.get(channelId);
 
-  if (!channel && channelId && API_KEY) { // Fetch if not in map and API key exists
+  if (!channel && channelId && API_KEY) {
     const singleChannelMap = await fetchChannelData([channelId]);
     channel = singleChannelMap.get(channelId);
   }
@@ -144,7 +142,6 @@ export const getVideoById = async (id: string): Promise<Video | undefined> => {
     const data = await response.json();
     if (!data.items || data.items.length === 0) return undefined;
     
-    // For getVideoById, channelMap can be initially empty as transformVideoItem will fetch if needed
     return transformVideoItem(data.items[0], new Map());
   } catch (error) {
     console.error(`Error fetching video by ID (${trimmedId}):`, error);
@@ -222,7 +219,7 @@ export const searchVideos = async (query: string, maxResults: number = 20, pageT
     console.error('YOUTUBE_API_KEY is not set. Returning empty for searchVideos.');
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
-  if (!trimmedQuery) return getVideos(maxResults, pageToken); // Or return empty if preferred for empty query
+  if (!trimmedQuery) return getVideos(maxResults, pageToken);
   
   try {
     let searchUrl = `${API_BASE_URL}/search?part=snippet&q=${encodeURIComponent(trimmedQuery)}&maxResults=${maxResults}&type=video&key=${API_KEY}`;
@@ -246,14 +243,12 @@ export const searchVideos = async (query: string, maxResults: number = 20, pageT
       return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults || 0 };
     }
 
-    // Fetch full details for these video IDs
     const videosResponse = await fetch(
       `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(',')}&key=${API_KEY}`
     );
     if (!videosResponse.ok) {
       const errorData = await videosResponse.json();
       console.error(`YouTube API Error (searchVideos - videos for query "${trimmedQuery}"):`, errorData.error?.message);
-      // Fallback: try to transform search items directly (less detail)
       const channelIdsFromSearch = [...new Set(searchData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
       const channelMapFromSearch = await fetchChannelData(channelIdsFromSearch);
       const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapFromSearch)));
@@ -267,7 +262,6 @@ export const searchVideos = async (query: string, maxResults: number = 20, pageT
     const channelIds = [...new Set(videosData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
     const channelMap = await fetchChannelData(channelIds);
 
-    // Preserve order from search results
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
     const orderedVideoItems = videoIds.map((id: string) => videosById.get(id)).filter(Boolean);
 
@@ -280,41 +274,55 @@ export const searchVideos = async (query: string, maxResults: number = 20, pageT
   }
 };
 
-const SUBSCRIBED_CHANNEL_IDS = [ // Example IDs, replace with actual logic if users can subscribe
-  'UC_x5XG1OV2P6uZZ5FSM9Ttw', 
-  'UCBJycsmduvYEL83R_U4JriQ', 
-  'UCsT0YIqwnpJCM-mx7-gSA4Q', 
-];
-
-// getSubscribedVideos would also need pageToken logic if we paginate per channel or globally
-export const getSubscribedVideos = async (maxTotalResults: number = 20, pageToken?: string): Promise<PaginatedVideosResponse> => {
-  // This function becomes more complex with pagination across multiple channels.
-  // A simpler approach for now: fetch a few from each and combine, then sort.
-  // True pagination would require a more sophisticated backend or more complex client logic.
+export const getSubscribedVideos = async (userId: string, maxTotalResults: number = 20, pageToken?: string): Promise<PaginatedVideosResponse> => {
   if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning empty for getSubscribedVideos.');
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
-
-  // If a pageToken is provided, it implies we're trying to paginate a combined list,
-  // which is hard to do directly with YouTube API per channel.
-  // For this example, we'll ignore pageToken for getSubscribedVideos and always fetch initial set.
-  // A real implementation might store cursors per channel or use a backend.
-  if (pageToken) {
-    console.warn("Pagination for combined subscribed videos is not fully supported in this example. Returning first page.");
-    // To prevent infinite loops if a token is somehow passed, return no more items.
-     return { videos: [], nextPageToken: undefined, totalResults: 0 };
+  if (!userId) {
+    console.warn('getSubscribedVideos called without userId. Returning empty.');
+    return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
 
+  let subscribedChannelIds: string[] = [];
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    const userDocSnap = await getDoc(userDocRef);
+    if (userDocSnap.exists()) {
+      subscribedChannelIds = userDocSnap.data().subscribedChannelIds || [];
+    } else {
+      console.log(`No user document found for userId: ${userId} in getSubscribedVideos.`);
+      return { videos: [], nextPageToken: undefined, totalResults: 0 };
+    }
+  } catch (error) {
+    console.error("Error fetching user's subscribed channel IDs from Firestore:", error);
+    return { videos: [], nextPageToken: undefined, totalResults: 0 };
+  }
+
+  if (subscribedChannelIds.length === 0) {
+    return { videos: [], nextPageToken: undefined, totalResults: 0 };
+  }
+  
+  // Note: True pagination for a combined feed from multiple YouTube channels (based on pageToken) is complex.
+  // This implementation fetches a batch from each subscribed channel and sorts them.
+  // A more robust pagination would ideally involve a backend that aggregates and cursors this data.
+  // For now, if a pageToken is provided, we'll assume it's for a subsequent conceptual "page"
+  // but the API calls to YouTube won't directly use it in a way that perfectly paginates the combined feed.
+  // We'll return an empty set if pageToken is present to avoid re-fetching the same initial set.
+  if (pageToken) {
+    console.warn("getSubscribedVideos: pageToken is present, returning empty to avoid re-fetching initial set in this simplified model.");
+    return { videos: [], nextPageToken: undefined, totalResults: 0 };
+  }
 
   try {
     let allSubscribedVideos: Video[] = [];
-    // Fetch a few from each channel to get a diverse set
-    const maxResultsPerChannel = Math.ceil(maxTotalResults / SUBSCRIBED_CHANNEL_IDS.length) || 5;
+    const maxResultsPerChannel = Math.max(5, Math.ceil(maxTotalResults / subscribedChannelIds.length));
     
-    const channelMap = await fetchChannelData(SUBSCRIBED_CHANNEL_IDS);
+    const channelMap = await fetchChannelData(subscribedChannelIds); // Get details for all subscribed channels once
 
-    for (const channelId of SUBSCRIBED_CHANNEL_IDS) {
+    for (const channelId of subscribedChannelIds) {
+      // Fetch latest videos for each channel
+      // We are not using a pageToken per channel here for simplicity in this combined feed.
       const response = await fetch(
         `${API_BASE_URL}/search?part=snippet&channelId=${encodeURIComponent(channelId)}&maxResults=${maxResultsPerChannel}&order=date&type=video&key=${API_KEY}`
       );
@@ -328,6 +336,7 @@ export const getSubscribedVideos = async (maxTotalResults: number = 20, pageToke
              );
              if(videosDetailsResponse.ok) {
                 const videoDetailsData = await videosDetailsResponse.json();
+                // Use the pre-fetched channelMap for transformVideoItem
                 const transformed = await Promise.all(videoDetailsData.items.map((item: any) => transformVideoItem(item, channelMap)));
                 allSubscribedVideos.push(...transformed);
              }
@@ -338,11 +347,10 @@ export const getSubscribedVideos = async (maxTotalResults: number = 20, pageToke
         console.error(`YouTube API Error (getSubscribedVideos for channel ${channelId}):`, errorData.error?.message);
       }
     }
-    // Sort all collected videos by publish date and take the top N.
     allSubscribedVideos.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     const finalVideos = allSubscribedVideos.slice(0, maxTotalResults);
     
-    // No reliable nextPageToken for this combined feed without more complex logic
+    // No reliable nextPageToken for this combined feed strategy
     return { videos: finalVideos, nextPageToken: undefined, totalResults: finalVideos.length };
   } catch (error) {
     console.error('Error fetching subscribed videos:', error);
@@ -392,7 +400,6 @@ export const getRecommendedVideos = async (videoId: string, maxResults: number =
     if (!videosResponse.ok) {
         const errorData = await videosResponse.json();
         console.error(`YouTube API Error (getRecommendedVideos - videos for relatedToVideoId: ${trimmedVideoId}):`, errorData.error?.message);
-        // Fallback: try to transform search items directly (less detail)
         const channelIdsFromSearch = [...new Set(searchData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
         const channelMapFromSearch = await fetchChannelData(channelIdsFromSearch);
         const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapFromSearch)));
@@ -475,7 +482,6 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
      if (!videosResponse.ok) {
         const errorData = await videosResponse.json();
         console.error(`YouTube API Error (getChannelVideos - videos for channel ${trimmedChannelId}):`, errorData.error?.message);
-        // Fallback: try to transform search items directly (less detail)
         const channelMapForSearch = await fetchChannelData([trimmedChannelId]); 
         const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapForSearch)));
         return { videos: fallbackVideos, nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
@@ -485,8 +491,6 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
         return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
     }
 
-    // When fetching channel videos, we primarily care about the current channel's details.
-    // The channelMap can be pre-populated or fetched once for the main channelId.
     const channelMap = await fetchChannelData([trimmedChannelId]); 
 
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
@@ -500,5 +504,3 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
 }
-
-    
