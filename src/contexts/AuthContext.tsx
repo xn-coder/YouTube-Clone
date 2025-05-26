@@ -19,6 +19,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Log the config being used by Firebase on the client for diagnostics
+    if (typeof window !== 'undefined') {
+      console.log("%cAuthContext: Initializing with Firebase config:", "color: blue; font-weight: bold;", {
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+      });
+    }
+
     if (isFirebasePotentiallyMisconfigured) {
       if (typeof window !== 'undefined') {
         console.warn("AuthProvider: Firebase appears to be misconfigured. User authentication may not work correctly. Please check your .env.local file and Firebase project settings.");
@@ -30,9 +42,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (auth && typeof auth.onAuthStateChanged === 'function') {
       const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
         if (currentUser) {
-          console.log('AuthContext: User detected by onAuthStateChanged. UID:', currentUser.uid, 'Email:', currentUser.email);
+          console.log('%cAuthContext: User detected by onAuthStateChanged. UID:', 'color: green;', currentUser.uid, 'Email:', currentUser.email);
         } else {
-          console.log('AuthContext: No user detected by onAuthStateChanged (user is null).');
+          console.log('%cAuthContext: No user detected by onAuthStateChanged (user is null).', 'color: orange;');
         }
         setUser(currentUser);
         setLoading(false);
@@ -62,3 +74,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+

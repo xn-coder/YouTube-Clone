@@ -16,13 +16,14 @@ const firebaseConfig = {
 // Check for placeholder or missing values
 export let isFirebasePotentiallyMisconfigured = false;
 const configValues = Object.values(firebaseConfig);
-if (configValues.some(value => !value || String(value).startsWith("YOUR_") || String(value).includes("YOUR"))) {
+if (configValues.some(value => !value || String(value).startsWith("YOUR_") || String(value).includes("YOUR_") || String(value).includes("your-"))) {
   isFirebasePotentiallyMisconfigured = true;
   if (typeof window !== 'undefined') { // Only log in browser console
     console.warn(
-      "Firebase Warning: One or more Firebase configuration values in `src/lib/firebase.ts` seem to be placeholders or are missing. " +
-      "Please ensure all `NEXT_PUBLIC_FIREBASE_...` environment variables are correctly set in your `.env.local` file. " +
-      "Authentication and other Firebase services may not work as expected. Loaded config:", firebaseConfig
+      "%cFirebase CRITICAL WARNING: Firebase configuration values in `.env.local` (or environment variables) seem to be placeholders, missing, or incorrect. " +
+      "Please ensure all `NEXT_PUBLIC_FIREBASE_...` variables are correctly set with your *actual* Firebase project credentials. " +
+      "Authentication and other Firebase services WILL NOT WORK correctly until this is fixed. " +
+      "Loaded config that caused this warning:", "color: red; font-size: 1.2em; font-weight: bold;", firebaseConfig
     );
   }
 }
@@ -36,7 +37,7 @@ try {
     app = getApp();
   }
 } catch (error) {
-  console.error("Firebase Error: Failed to initialize Firebase app. This is critical. Please check your Firebase configuration thoroughly.", error);
+  console.error("%cFirebase CRITICAL ERROR: Failed to initialize Firebase app. This is critical. Please check your Firebase configuration thoroughly.", "color: red; font-size: 1.2em; font-weight: bold;", error);
   console.error("Attempted to initialize with config:", firebaseConfig);
   // Assign a dummy app object to prevent crashes if auth or db are accessed, but they won't work.
   app = { name: '[uninitialized]', options: {}, automaticDataCollectionEnabled: false } as unknown as FirebaseApp;
@@ -62,7 +63,7 @@ if (app && app.name !== '[uninitialized]') {
   db = {} as Firestore;
   if (typeof window !== 'undefined' && !isFirebasePotentiallyMisconfigured) {
       // This case (app uninitialized but not caught by earlier checks) is unlikely but good to flag.
-      console.error("Firebase Critical Error: Firebase app object is not available. Auth and Firestore will not work.");
+      console.error("Firebase CRITICAL ERROR: Firebase app object is not available. Auth and Firestore will not work.");
       isFirebasePotentiallyMisconfigured = true;
   }
 }
