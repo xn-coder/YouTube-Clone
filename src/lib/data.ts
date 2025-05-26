@@ -163,7 +163,7 @@ export const getCommentsByVideoId = async (videoId: string, maxResults: number =
     return { comments: [], nextPageToken: undefined, totalResults: 0 };
   }
   try {
-    let url = `${API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${trimmedVideoId}&maxResults=${maxResults}&textFormat=html&key=${API_KEY}`;
+    let url = `${API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${encodeURIComponent(trimmedVideoId)}&maxResults=${maxResults}&textFormat=html&key=${API_KEY}`;
     if (pageToken) {
       url += `&pageToken=${pageToken}`;
     }
@@ -316,7 +316,7 @@ export const getSubscribedVideos = async (maxTotalResults: number = 20, pageToke
 
     for (const channelId of SUBSCRIBED_CHANNEL_IDS) {
       const response = await fetch(
-        `${API_BASE_URL}/search?part=snippet&channelId=${channelId}&maxResults=${maxResultsPerChannel}&order=date&type=video&key=${API_KEY}`
+        `${API_BASE_URL}/search?part=snippet&channelId=${encodeURIComponent(channelId)}&maxResults=${maxResultsPerChannel}&order=date&type=video&key=${API_KEY}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -361,7 +361,7 @@ export const getRecommendedVideos = async (videoId: string, maxResults: number =
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
   try {
-    let searchUrl = `${API_BASE_URL}/search?part=snippet&relatedToVideoId=${trimmedVideoId}&type=video&maxResults=${maxResults}&key=${API_KEY}`;
+    let searchUrl = `${API_BASE_URL}/search?part=snippet&relatedToVideoId=${encodeURIComponent(trimmedVideoId)}&type=video&maxResults=${maxResults}&key=${API_KEY}`;
     if (pageToken) {
       searchUrl += `&pageToken=${pageToken}`;
     }
@@ -392,6 +392,7 @@ export const getRecommendedVideos = async (videoId: string, maxResults: number =
     if (!videosResponse.ok) {
         const errorData = await videosResponse.json();
         console.error(`YouTube API Error (getRecommendedVideos - videos for relatedToVideoId: ${trimmedVideoId}):`, errorData.error?.message);
+        // Fallback: try to transform search items directly (less detail)
         const channelIdsFromSearch = [...new Set(searchData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
         const channelMapFromSearch = await fetchChannelData(channelIdsFromSearch);
         const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapFromSearch)));
@@ -447,7 +448,7 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
   try {
-    let searchUrl = `${API_BASE_URL}/search?part=snippet&channelId=${trimmedChannelId}&maxResults=${maxResults}&order=date&type=video&key=${API_KEY}`;
+    let searchUrl = `${API_BASE_URL}/search?part=snippet&channelId=${encodeURIComponent(trimmedChannelId)}&maxResults=${maxResults}&order=date&type=video&key=${API_KEY}`;
     if (pageToken) {
       searchUrl += `&pageToken=${pageToken}`;
     }
@@ -474,6 +475,7 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
      if (!videosResponse.ok) {
         const errorData = await videosResponse.json();
         console.error(`YouTube API Error (getChannelVideos - videos for channel ${trimmedChannelId}):`, errorData.error?.message);
+        // Fallback: try to transform search items directly (less detail)
         const channelMapForSearch = await fetchChannelData([trimmedChannelId]); 
         const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapForSearch)));
         return { videos: fallbackVideos, nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
@@ -483,6 +485,8 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
         return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
     }
 
+    // When fetching channel videos, we primarily care about the current channel's details.
+    // The channelMap can be pre-populated or fetched once for the main channelId.
     const channelMap = await fetchChannelData([trimmedChannelId]); 
 
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
