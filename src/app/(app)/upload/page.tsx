@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db, firebaseApp } from '@/lib/firebase'; // Use firebaseApp for storage
+import { db, firebaseApp } from '@/lib/firebase'; 
 import { Progress } from '@/components/ui/progress';
 
 const storage = getStorage(firebaseApp);
@@ -21,6 +21,7 @@ export default function UploadPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -45,7 +46,6 @@ export default function UploadPage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      // Basic video type check (can be expanded)
       if (file.type.startsWith('video/')) {
         setVideoFile(file);
       } else {
@@ -54,9 +54,11 @@ export default function UploadPage() {
           description: 'Please select a video file (e.g., MP4, MOV, WebM).',
           variant: 'destructive',
         });
-        event.target.value = ''; // Clear the input
+        if (event.target) event.target.value = ''; 
         setVideoFile(null);
       }
+    } else {
+      setVideoFile(null); // If no file is selected (e.g., user cancels dialog)
     }
   };
 
@@ -75,7 +77,6 @@ export default function UploadPage() {
     setUploadProgress(0);
 
     try {
-      // Sanitize filename slightly, or use a UUID for more robustness
       const cleanFileName = videoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const videoFileName = `${user.uid}_${Date.now()}_${cleanFileName}`;
       const storageRef = ref(storage, `videos/${user.uid}/${videoFileName}`);
@@ -87,34 +88,48 @@ export default function UploadPage() {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           setUploadProgress(progress);
         },
-        (error) => {
+        (error: FirebaseStorageError) => { // Explicitly type the error
           console.error('Upload failed:', error);
+          let description = error.message || 'Could not upload video. Please try again.';
+          if (error.code) {
+            switch (error.code) {
+              case 'storage/unauthorized':
+                description = "Permission denied. Please check your Firebase Storage security rules to ensure you have write access to the upload path.";
+                console.error("Detailed Firebase Storage Error: You are not authorized to perform this action. Storage path: " + `videos/${user.uid}/`);
+                break;
+              case 'storage/canceled':
+                description = "Upload was canceled.";
+                break;
+              case 'storage/unknown':
+                description = "An unknown error occurred during upload. Please check the network and try again.";
+                break;
+              default:
+                description = `Upload error: ${error.code}. Please try again.`;
+            }
+          }
           toast({
             title: 'Upload Failed',
-            description: error.message || 'Could not upload video. Please try again.',
+            description: description,
             variant: 'destructive',
           });
           setIsUploading(false);
         },
         async () => {
-          // Upload completed successfully, now get the download URL
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
-          // Save metadata to Firestore
-          await addDoc(collection(db, 'userUploadedVideos'), { // Changed collection name
+          await addDoc(collection(db, 'userUploadedVideos'), {
             userId: user.uid,
             title,
             description,
             videoUrl: downloadURL, 
             videoStoragePath: storageRef.fullPath,
-            thumbnailUrl: '', // Placeholder - thumbnail generation is complex
+            thumbnailUrl: '', 
             fileName: videoFile.name,
             fileType: videoFile.type,
             fileSize: videoFile.size,
             createdAt: serverTimestamp(),
             views: 0,
             likes: 0,
-            // duration would ideally be extracted, but requires client/server processing
           });
 
           toast({
@@ -122,26 +137,21 @@ export default function UploadPage() {
             description: `"${title}" has been uploaded.`,
           });
           setIsUploading(false);
-          setUploadProgress(100); // Ensure progress bar shows complete
+          setUploadProgress(100); 
           
-          // Reset form or redirect
           setTitle('');
           setDescription('');
           setVideoFile(null);
-          // Consider removing the file from the input visually if possible or redirecting.
-          // For now, just clearing state. The input field itself doesn't reset easily without full form reset.
-          if (event.target instanceof HTMLFormElement) {
-            event.target.reset(); 
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''; // Reset the file input
           }
-          
-          // router.push('/'); // Or to a "my videos" page
         }
       );
     } catch (error: any) {
-      console.error('Error during upload process:', error);
+      console.error('Error during upload process setup:', error);
       toast({
         title: 'Error',
-        description: 'An unexpected error occurred during upload.',
+        description: 'An unexpected error occurred before upload could start.',
         variant: 'destructive',
       });
       setIsUploading(false);
@@ -167,7 +177,16 @@ export default function UploadPage() {
                   className="relative cursor-pointer rounded-md font-medium text-primary hover:text-primary/80 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-ring"
                 >
                   <span>Select a file</span>
-                  <Input id="videoFile" name="videoFile" type="file" className="sr-only" onChange={handleFileChange} accept="video/*" disabled={isUploading} />
+                  <Input 
+                    ref={fileInputRef}
+                    id="videoFile" 
+                    name="videoFile" 
+                    type="file" 
+                    className="sr-only" 
+                    onChange={handleFileChange} 
+                    accept="video/*" 
+                    disabled={isUploading} 
+                  />
                 </label>
               </div>
               {videoFile && <p className="text-xs text-foreground mt-1">{videoFile.name} ({(videoFile.size / (1024*1024)).toFixed(2)} MB)</p>}
@@ -208,7 +227,7 @@ export default function UploadPage() {
         {isUploading && (
           <div className="space-y-1">
             <Progress value={uploadProgress} className="w-full h-2.5" />
-            <p className="text-xs text-muted-foreground text-center">{Math.round(uploadProgress)}% uploaded</p>
+            <p className="text-xs text-muted-foreground text-center">{uploadProgress > 0 ? Math.round(uploadProgress) : '0'}% uploaded</p>
           </div>
         )}
 
