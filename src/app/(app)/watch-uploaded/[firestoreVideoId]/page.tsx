@@ -11,8 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { formatPublishedAt, formatNumber } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-// Note: AppCommentsList might need adaptation if comments are to be supported for uploaded videos.
-// For now, comments are not included on this page.
+import type { Blob as FirestoreBlob } from 'firebase/firestore'; // Import Firestore Blob type
 
 const WatchUploadedVideoPageSkeleton = () => (
   <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6 animate-pulse">
@@ -35,6 +34,7 @@ export default function WatchUploadedVideoPage() {
   const [video, setVideo] = useState<UserUploadedVideo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [videoDataB64, setVideoDataB64] = useState<string | null>(null);
 
   useEffect(() => {
     if (!firestoreVideoId) {
@@ -45,6 +45,7 @@ export default function WatchUploadedVideoPage() {
     const fetchVideo = async () => {
       setIsLoading(true);
       setError(null);
+      setVideoDataB64(null);
       try {
         const videoData = await getUploadedVideoById(firestoreVideoId);
         if (!videoData) {
@@ -55,6 +56,17 @@ export default function WatchUploadedVideoPage() {
         }
         setVideo(videoData);
         document.title = `${videoData.title} - Youtube Clone`;
+
+        // Convert Firestore Blob to Base64 for the player
+        if (videoData.videoDataBlob && typeof (videoData.videoDataBlob as any).toBase64 === 'function') {
+          const firestoreBlob = videoData.videoDataBlob as FirestoreBlob; // Cast to FirestoreBlob
+          setVideoDataB64(firestoreBlob.toBase64());
+        } else if (videoData.videoDataBlob) {
+          // Fallback if it's already a string (less likely with current upload logic)
+           console.warn("videoDataBlob is not a Firestore Blob object, attempting to use as Base64 string directly.");
+           setVideoDataB64(videoData.videoDataBlob as string);
+        }
+
       } catch (err) {
         console.error('Error fetching uploaded video:', err);
         setError('Failed to load video data.');
@@ -73,7 +85,6 @@ export default function WatchUploadedVideoPage() {
   }
 
   if (error || !video) {
-    // notFound() would have been called already if video is null from fetch
     return (
       <div className="container mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center">
         <VideoOff className="h-24 w-24 text-destructive mb-4" />
@@ -84,18 +95,25 @@ export default function WatchUploadedVideoPage() {
     );
   }
   
-  // Basic owner check (could be expanded if user profiles are implemented)
   const isOwner = user && video.userId === user.uid;
 
   return (
     <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="lg:w-2/3">
-          <VideoPlayer
-            videoUrl={video.videoUrl} // Pass the direct video URL
-            title={video.title}
-            posterUrl={video.thumbnailUrl} // Pass poster if available
-          />
+          {videoDataB64 && video.fileType ? (
+            <VideoPlayer
+              videoDataB64={videoDataB64}
+              videoFileType={video.fileType}
+              title={video.title}
+              posterUrl={video.thumbnailUrl}
+            />
+          ) : (
+            <div className="aspect-video w-full overflow-hidden rounded-xl bg-muted shadow-2xl flex items-center justify-center">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <p className="ml-2">Loading video data...</p>
+            </div>
+          )}
           <div className="mt-4">
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">{video.title}</h1>
             <div className="mt-2 text-sm text-muted-foreground">
@@ -105,14 +123,6 @@ export default function WatchUploadedVideoPage() {
               <span className="mx-1.5">&bull;</span>
               <span>{formatNumber(video.views)} views</span>
             </div>
-            {/* Future: Add Edit/Delete buttons for owner */}
-            {/* {isOwner && (
-              <div className="mt-3 flex gap-2">
-                <Button variant="outline" size="sm">Edit Video</Button>
-                <Button variant="destructive" size="sm">Delete Video</Button>
-              </div>
-            )} */}
-
             {video.description && (
               <div className="mt-4 p-3 bg-muted/50 rounded-lg">
                 <h3 className="text-md font-semibold text-foreground mb-1">Description</h3>
@@ -120,16 +130,10 @@ export default function WatchUploadedVideoPage() {
               </div>
             )}
             <Separator className="my-6" />
-            {/* Comments for uploaded videos are a separate feature. 
-                If implemented, AppCommentsList would be used here, possibly with a different 'scope' or 'type'
-                to distinguish from YouTube video comments.
-            */}
             <p className="text-muted-foreground text-center py-4">Comments for uploaded videos are not yet available.</p>
           </div>
         </div>
         <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit">
-           {/* Recommended videos section could list other videos by the same user, or popular uploaded videos.
-               For now, it's empty for uploaded videos. */}
            <div className="bg-card p-4 rounded-lg shadow">
              <h3 className="text-lg font-semibold text-card-foreground mb-3">More Videos</h3>
              <p className="text-sm text-muted-foreground">Recommendations for uploaded videos coming soon.</p>

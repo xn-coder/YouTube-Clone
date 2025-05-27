@@ -10,12 +10,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, UploadCloud } from 'lucide-react';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, type FirebaseStorageError } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db, firebaseApp } from '@/lib/firebase'; 
+// Reordered imports from firebase/firestore
+import { Blob as FirestoreBlob, collection, addDoc, serverTimestamp } from 'firebase/firestore'; 
+import { db } from '@/lib/firebase'; 
 import { Progress } from '@/components/ui/progress';
 
-const storage = getStorage(firebaseApp);
+// Firestore document size limit is 1 MiB.
+// Base64 encoding adds ~33% overhead. So an actual file limit needs to be smaller.
+// Let's set a practical limit of e.g., 900KB for the original file.
+const MAX_FILE_SIZE_BYTES = 900 * 1024; // 900 KB
 
 export default function UploadPage() {
   const { user, loading: authLoading } = useAuth();
@@ -27,7 +30,7 @@ export default function UploadPage() {
   const [description, setDescription] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0); // Keep for visual, though it'll be quick
 
   if (authLoading) {
     return <div className="container mx-auto px-4 py-6 flex justify-center items-center min-h-[calc(100vh-10rem)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
@@ -46,9 +49,7 @@ export default function UploadPage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      if (file.type.startsWith('video/')) {
-        setVideoFile(file);
-      } else {
+      if (!file.type.startsWith('video/')) {
         toast({
           title: 'Invalid File Type',
           description: 'Please select a video file (e.g., MP4, MOV, WebM).',
@@ -56,9 +57,21 @@ export default function UploadPage() {
         });
         if (event.target) event.target.value = ''; 
         setVideoFile(null);
+        return;
       }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        toast({
+          title: 'File Too Large',
+          description: `Video file size cannot exceed ${MAX_FILE_SIZE_BYTES / 1024} KB due to Firestore document limits. Please choose a smaller file.`,
+          variant: 'destructive',
+        });
+        if (event.target) event.target.value = '';
+        setVideoFile(null);
+        return;
+      }
+      setVideoFile(file);
     } else {
-      setVideoFile(null); // If no file is selected (e.g., user cancels dialog)
+      setVideoFile(null);
     }
   };
 
@@ -73,59 +86,35 @@ export default function UploadPage() {
       return;
     }
 
+    if (videoFile.size > MAX_FILE_SIZE_BYTES) {
+      toast({
+        title: 'File Too Large',
+        description: `Video file size cannot exceed ${MAX_FILE_SIZE_BYTES / 1024} KB. Please choose a smaller file.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(50); // Simulate some progress as file reading is quick
 
     try {
-      const cleanFileName = videoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const videoFileName = `${user.uid}_${Date.now()}_${cleanFileName}`;
-      const storageRef = ref(storage, `videos/${user.uid}/${videoFileName}`);
-      const uploadTask = uploadBytesResumable(storageRef, videoFile);
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-        },
-        (error: FirebaseStorageError) => { // Explicitly type the error
-          console.error('Upload failed:', error);
-          let description = error.message || 'Could not upload video. Please try again.';
-          if (error.code) {
-            switch (error.code) {
-              case 'storage/unauthorized':
-                description = "Permission denied. Please check your Firebase Storage security rules to ensure you have write access to the upload path.";
-                console.error("Detailed Firebase Storage Error: You are not authorized to perform this action. Storage path: " + `videos/${user.uid}/`);
-                break;
-              case 'storage/canceled':
-                description = "Upload was canceled.";
-                break;
-              case 'storage/unknown':
-                description = "An unknown error occurred during upload. Please check the network and try again.";
-                break;
-              default:
-                description = `Upload error: ${error.code}. Please try again.`;
-            }
-          }
-          toast({
-            title: 'Upload Failed',
-            description: description,
-            variant: 'destructive',
-          });
-          setIsUploading(false);
-        },
-        async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        if (e.target?.result && e.target.result instanceof ArrayBuffer) {
+          const arrayBuffer = e.target.result;
+          const uint8Array = new Uint8Array(arrayBuffer);
+          // Use Blob directly if imported without alias
+          const videoDataBlob = FirestoreBlob.fromUint8Array(uint8Array);
 
           await addDoc(collection(db, 'userUploadedVideos'), {
             userId: user.uid,
             title,
             description,
-            videoUrl: downloadURL, 
-            videoStoragePath: storageRef.fullPath,
-            thumbnailUrl: '', 
+            videoDataBlob, // Store the Blob object
+            fileType: videoFile.type, // Store MIME type
+            thumbnailUrl: 'https://placehold.co/320x180.png', // Placeholder
             fileName: videoFile.name,
-            fileType: videoFile.type,
             fileSize: videoFile.size,
             createdAt: serverTimestamp(),
             views: 0,
@@ -134,27 +123,44 @@ export default function UploadPage() {
 
           toast({
             title: 'Upload Successful!',
-            description: `"${title}" has been uploaded.`,
+            description: `"${title}" has been processed and saved to Firestore.`,
           });
           setIsUploading(false);
-          setUploadProgress(100); 
+          setUploadProgress(100);
           
           setTitle('');
           setDescription('');
           setVideoFile(null);
           if (fileInputRef.current) {
-            fileInputRef.current.value = ''; // Reset the file input
+            fileInputRef.current.value = '';
           }
+        } else {
+          throw new Error('Failed to read file data.');
         }
-      );
+      };
+
+      reader.onerror = (error) => {
+        console.error('File reading error:', error);
+        toast({
+          title: 'File Read Error',
+          description: 'Could not read the video file. Please try again.',
+          variant: 'destructive',
+        });
+        setIsUploading(false);
+        setUploadProgress(0);
+      };
+
+      reader.readAsArrayBuffer(videoFile);
+
     } catch (error: any) {
-      console.error('Error during upload process setup:', error);
+      console.error('Error preparing video for Firestore:', error);
       toast({
         title: 'Error',
-        description: 'An unexpected error occurred before upload could start.',
+        description: error.message || 'An unexpected error occurred during processing.',
         variant: 'destructive',
       });
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -163,7 +169,9 @@ export default function UploadPage() {
       <div className="text-center mb-10">
         <UploadCloud className="mx-auto h-16 w-16 text-primary mb-3" />
         <h1 className="text-3xl font-bold text-foreground">Upload Your Video</h1>
-        <p className="text-muted-foreground mt-2">Share your content with the world (or just this app!).</p>
+        <p className="text-muted-foreground mt-2">
+          Share your content with the world! (Max file size: {MAX_FILE_SIZE_BYTES / 1024} KB due to Firestore limits)
+        </p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-6 bg-card p-6 sm:p-8 rounded-xl shadow-lg">
         <div>
@@ -189,8 +197,8 @@ export default function UploadPage() {
                   />
                 </label>
               </div>
-              {videoFile && <p className="text-xs text-foreground mt-1">{videoFile.name} ({(videoFile.size / (1024*1024)).toFixed(2)} MB)</p>}
-              {!videoFile && <p className="text-xs text-muted-foreground">MP4, MOV, WebM, etc.</p>}
+              {videoFile && <p className="text-xs text-foreground mt-1">{videoFile.name} ({(videoFile.size / 1024).toFixed(2)} KB)</p>}
+              {!videoFile && <p className="text-xs text-muted-foreground">MP4, MOV, WebM, etc. (Max {MAX_FILE_SIZE_BYTES / 1024} KB)</p>}
             </div>
           </div>
         </div>
@@ -227,14 +235,16 @@ export default function UploadPage() {
         {isUploading && (
           <div className="space-y-1">
             <Progress value={uploadProgress} className="w-full h-2.5" />
-            <p className="text-xs text-muted-foreground text-center">{uploadProgress > 0 ? Math.round(uploadProgress) : '0'}% uploaded</p>
+            <p className="text-xs text-muted-foreground text-center">
+              {uploadProgress > 0 ? (uploadProgress < 100 ? `Processing... ${Math.round(uploadProgress)}%` : 'Finalizing...') : 'Starting...'}
+            </p>
           </div>
         )}
 
         <div className="flex justify-end pt-2">
           <Button type="submit" className="min-w-[150px] py-2.5 px-6" disabled={isUploading || !videoFile || !title.trim()}>
             {isUploading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
-            {isUploading ? 'Uploading...' : 'Upload Video'}
+            {isUploading ? 'Processing...' : 'Upload Video'}
           </Button>
         </div>
       </form>

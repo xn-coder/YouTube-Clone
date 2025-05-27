@@ -1,18 +1,47 @@
+
 interface VideoPlayerProps {
-  youtubeVideoId: string; // Use YouTube video ID for iframe embed
+  youtubeVideoId?: string; // YouTube video ID for iframe embed
   title: string;
-  posterUrl?: string; // Use high quality thumbnail as poster
-  videoUrl?: string; // Fallback for direct video links (not used for YouTube embeds)
+  posterUrl?: string; 
+  videoUrl?: string; // For direct video URLs (e.g., from Firebase Storage before blob change)
+  videoDataB64?: string; // Base64 encoded video data
+  videoFileType?: string; // MIME type for videoDataB64, e.g., 'video/mp4'
 }
 
-export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: VideoPlayerProps) {
-  // Prefer YouTube iframe embed if youtubeVideoId is provided
+export function VideoPlayer({ 
+  youtubeVideoId, 
+  title, 
+  posterUrl, 
+  videoUrl,
+  videoDataB64,
+  videoFileType 
+}: VideoPlayerProps) {
+  // Priority: 1. Firestore Blob Data URI, 2. YouTube Embed, 3. Direct Video URL
+  if (videoDataB64 && videoFileType) {
+    const dataUri = `data:${videoFileType};base64,${videoDataB64}`;
+    return (
+      <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl">
+        <video
+          src={dataUri}
+          title={title}
+          controls
+          autoPlay
+          className="h-full w-full"
+          poster={posterUrl || `https://placehold.co/1280x720.png`}
+          data-ai-hint="video player"
+        >
+          Your browser does not support the video tag or this video format.
+        </video>
+      </div>
+    );
+  }
+
   if (youtubeVideoId) {
     return (
       <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl">
         <iframe
           className="h-full w-full"
-          src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&rel=0`} // autoplay=1, rel=0 to hide related videos
+          src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&rel=0`}
           title={title}
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -24,15 +53,14 @@ export function VideoPlayer({ youtubeVideoId, title, posterUrl, videoUrl }: Vide
     );
   }
 
-  // Fallback to HTML5 video player if direct videoUrl is provided
-  if (videoUrl) {
+  if (videoUrl) { // This was for Firebase Storage URL, less relevant now for uploaded videos if using blobs
     return (
       <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl">
         <video
           src={videoUrl}
           title={title}
           controls
-          autoPlay // Added autoPlay for HTML5 video
+          autoPlay
           className="h-full w-full"
           poster={posterUrl || `https://placehold.co/1280x720.png`}
           data-ai-hint="video player"
