@@ -13,6 +13,15 @@ interface AppCommentCardProps {
 }
 
 export function AppCommentCard({ comment, isReply = false }: AppCommentCardProps) {
+  // Defensive check for createdAt
+  let displayDate: string;
+  if (comment.createdAt && typeof comment.createdAt.toISOString === 'function') {
+    displayDate = formatPublishedAt(comment.createdAt.toISOString());
+  } else {
+    console.warn('AppCommentCard: comment.createdAt is missing or not a Date object. Using current date as fallback.', comment);
+    displayDate = formatPublishedAt(new Date().toISOString());
+  }
+
   return (
     <div className={`flex gap-3 py-3 ${isReply ? 'pl-8' : ''}`}>
       {/* User avatar, not linking to channel for app-specific comments unless user profile pages are built */}
@@ -27,7 +36,7 @@ export function AppCommentCard({ comment, isReply = false }: AppCommentCardProps
           <span className="text-xs sm:text-sm font-medium text-foreground">
             {comment.userName || 'Anonymous User'}
           </span>
-          <span className="text-xs text-muted-foreground">{formatPublishedAt(comment.createdAt.toISOString())}</span>
+          <span className="text-xs text-muted-foreground">{displayDate}</span>
         </div>
         {/* Display plain text content; if HTML is stored, ensure sanitization or use dangerouslySetInnerHTML carefully */}
         <p className="mt-1 text-sm text-foreground whitespace-pre-wrap">{comment.text}</p>
@@ -55,5 +64,3 @@ export function AppCommentCard({ comment, isReply = false }: AppCommentCardProps
     </div>
   );
 }
-
-    
