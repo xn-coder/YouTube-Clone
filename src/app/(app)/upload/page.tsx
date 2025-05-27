@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, type FormEvent, useRef } from 'react';
+import { useState, type FormEvent, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, UploadCloud } from 'lucide-react';
-// Import Firestore functions directly, and FirestoreBlob from our firebase.ts
+// Changed to namespace import
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'; 
-import { db, FirestoreBlob } from '@/lib/firebase'; 
+import { db, FirestoreBlob } from '@/lib/firebase'; // Import Blob as FirestoreBlob from firebase.ts
 import { Progress } from '@/components/ui/progress';
 
 // Firestore document size limit is 1 MiB.
@@ -31,6 +31,22 @@ export default function UploadPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isBlobAvailable, setIsBlobAvailable] = useState(false);
+
+  useEffect(() => {
+    if (typeof FirestoreBlob !== 'undefined') {
+      setIsBlobAvailable(true);
+    } else {
+      setIsBlobAvailable(false);
+      toast({
+        title: 'Upload Feature Unavailable',
+        description: 'Video upload to Firestore is currently unavailable due to a configuration issue. Please contact support.',
+        variant: 'destructive',
+        duration: 10000,
+      });
+    }
+  }, []);
+
 
   if (authLoading) {
     return <div className="container mx-auto px-4 py-6 flex justify-center items-center min-h-[calc(100vh-10rem)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
@@ -77,6 +93,16 @@ export default function UploadPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!isBlobAvailable) {
+      toast({
+        title: 'Upload Feature Unavailable',
+        description: 'Cannot upload video at this time due to a configuration issue.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!videoFile || !title.trim()) {
       toast({
         title: 'Missing Information',
@@ -105,7 +131,9 @@ export default function UploadPage() {
           const arrayBuffer = e.target.result;
           const uint8Array = new Uint8Array(arrayBuffer);
           
-          // Use FirestoreBlob from our re-export in firebase.ts
+          if (!FirestoreBlob) { // Double check FirestoreBlob availability
+            throw new Error('Firestore Blob functionality is not available.');
+          }
           const videoDataBlob = FirestoreBlob.fromUint8Array(uint8Array);
 
           await addDoc(collection(db, 'userUploadedVideos'), {
@@ -173,6 +201,9 @@ export default function UploadPage() {
         <p className="text-muted-foreground mt-2">
           Share your content with the world! (Max file size: {MAX_FILE_SIZE_BYTES / 1024} KB due to Firestore limits)
         </p>
+        {!isBlobAvailable && (
+          <p className="text-destructive text-sm mt-2">Note: Video upload to Firestore is currently unavailable due to a configuration issue.</p>
+        )}
       </div>
       <form onSubmit={handleSubmit} className="space-y-6 bg-card p-6 sm:p-8 rounded-xl shadow-lg">
         <div>
@@ -194,7 +225,7 @@ export default function UploadPage() {
                     className="sr-only" 
                     onChange={handleFileChange} 
                     accept="video/*" 
-                    disabled={isUploading} 
+                    disabled={isUploading || !isBlobAvailable} 
                   />
                 </label>
               </div>
@@ -215,7 +246,7 @@ export default function UploadPage() {
             className="mt-1"
             placeholder="My Awesome Video"
             required
-            disabled={isUploading}
+            disabled={isUploading || !isBlobAvailable}
           />
         </div>
 
@@ -229,7 +260,7 @@ export default function UploadPage() {
             onChange={(e) => setDescription(e.target.value)}
             className="mt-1"
             placeholder="Tell viewers about your video (optional)"
-            disabled={isUploading}
+            disabled={isUploading || !isBlobAvailable}
           />
         </div>
         
@@ -243,7 +274,7 @@ export default function UploadPage() {
         )}
 
         <div className="flex justify-end pt-2">
-          <Button type="submit" className="min-w-[150px] py-2.5 px-6" disabled={isUploading || !videoFile || !title.trim()}>
+          <Button type="submit" className="min-w-[150px] py-2.5 px-6" disabled={isUploading || !videoFile || !title.trim() || !isBlobAvailable}>
             {isUploading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
             {isUploading ? 'Processing...' : 'Upload Video'}
           </Button>

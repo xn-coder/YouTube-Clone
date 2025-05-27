@@ -48,8 +48,19 @@ try {
 
 let authInstance: Auth;
 let dbInstance: Firestore;
-// Use the Blob from the main firestore namespace import
-const FirestoreBlob = firestore.Blob;
+let FirestoreBlob: typeof firestore.Blob | undefined = undefined;
+
+if (firestore && typeof firestore.Blob !== 'undefined') {
+  FirestoreBlob = firestore.Blob;
+} else {
+  console.error(
+    "%cFirebase CRITICAL MODULE ERROR: `firestore.Blob` is undefined after importing `firebase/firestore`. " +
+    "This indicates a severe issue with the Firebase SDK module resolution or installation. " +
+    "Video upload functionality requiring Firestore Blob will be unavailable. " +
+    "Please try deleting node_modules, .next, and reinstalling dependencies (npm install).",
+    "color: red; font-size: 1.2em; font-weight: bold;"
+  );
+}
 
 
 if (app && app.name !== '[uninitialized]') {
