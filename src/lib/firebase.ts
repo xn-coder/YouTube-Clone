@@ -80,4 +80,4 @@ if (app && app.name !== '[uninitialized]') {
   }
 }
 
-export { app, auth, db };
+export { app as firebaseApp, auth, db }; // Export app as firebaseApp

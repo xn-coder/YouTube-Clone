@@ -1,10 +1,9 @@
 
-
 export interface Channel {
   id: string;
   name: string;
   avatarUrl: string;
-  subscribers: number; // Store as number for potential calculations, format for display
+  subscribers: number; 
   description?: string;
   bannerUrl?: string;
 }
@@ -12,49 +11,49 @@ export interface Channel {
 export interface Video {
   id: string;
   title: string;
-  thumbnailUrl: string; // Default/Medium quality for cards
-  highQualityThumbnailUrl?: string; // Higher quality for player poster
-  channel: Channel; // Simplified, will be populated carefully
-  views: number; // Store as number
-  uploadDate: string; // Formatted string like "2 weeks ago"
-  publishedAt: string; // ISO date string from API
-  duration: string; // Formatted string like "10:32"
+  thumbnailUrl: string; 
+  highQualityThumbnailUrl?: string; 
+  channel: Channel; 
+  views: number; 
+  uploadDate: string; 
+  publishedAt: string; 
+  duration: string; 
   description?: string;
-  videoUrl?: string; // Actual video file (not directly from YT API for embedding usually)
-  likeCount?: number; // Store as number
+  videoUrl?: string; 
+  likeCount?: number; 
 }
 
 export interface AppComment {
-  id: string; // Firestore document ID
+  id: string; 
   videoId: string;
   userId: string;
   userName: string;
   userAvatarUrl: string | null;
-  text: string; // HTML content, or plain text if sanitized before storing
-  createdAt: Date; // JS Date object, converted from Firestore Timestamp
-  updatedAt: Date; // JS Date object
+  text: string; 
+  createdAt: Date; 
+  updatedAt: Date; 
   likes: number;
-  // replies?: AppComment[]; // For nested replies if implemented
+  // replies?: AppComment[]; 
 }
 
 export interface WatchHistoryItem {
-  id: string; // Firestore document ID (usually videoId if we overwrite, or unique if multiple views)
+  id: string; 
   videoId: string;
   videoTitle: string;
   channelId: string;
   channelName: string;
   thumbnailUrl: string;
-  watchedAt: Date; // JS Date object, converted from Firestore Timestamp
+  watchedAt: Date; 
 }
 
 export interface SavedVideoItem {
-  id: string; // videoId can serve as a unique ID within the array
+  id: string; 
   videoId: string;
   title: string;
   thumbnailUrl: string;
   channelId: string;
   channelName: string;
-  savedAt: Date; // JS Date object, from Firestore Timestamp
+  savedAt: Date; 
 }
 
 export interface Playlist {
@@ -65,21 +64,38 @@ export interface Playlist {
   channelId: string;
   channelTitle: string;
   videoCount: number;
-  publishedAt: string; // ISO date string
+  publishedAt: string; 
 }
 
 export interface PlaylistItem {
-  id: string; // This is the playlist item ID from YouTube API, not the video ID
+  id: string; 
   playlistId: string;
   videoId: string;
   title: string;
   description?: string;
   thumbnailUrl: string;
-  channelId: string; // Channel that owns the playlist
-  channelTitle: string; // Channel that owns the playlist
-  videoOwnerChannelId?: string; // Channel that owns the video
-  videoOwnerChannelTitle?: string; // Channel that owns the video
+  channelId: string; 
+  channelTitle: string; 
+  videoOwnerChannelId?: string; 
+  videoOwnerChannelTitle?: string; 
   position: number;
-  publishedAt: string; // When the video was added to the playlist
-  videoPublishedAt?: string; // When the video itself was published
+  publishedAt: string; 
+  videoPublishedAt?: string; 
+}
+
+export interface UserUploadedVideo {
+  id: string; // Firestore document ID
+  userId: string;
+  title: string;
+  description: string;
+  videoUrl: string; // Download URL from Firebase Storage
+  videoStoragePath: string; // Path in Firebase Storage
+  thumbnailUrl: string; // URL or path to thumbnail (placeholder for now)
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: Date; // JS Date object
+  views: number;
+  likes: number;
+  duration?: string; // Optional: if we can determine it
 }

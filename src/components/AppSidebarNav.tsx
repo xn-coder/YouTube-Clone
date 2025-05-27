@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Flame, Youtube, UserCircle, ChevronRight, History, ListVideo, PlayCircle } from 'lucide-react'; // Added PlayCircle
+import { Home, Flame, Youtube, UserCircle, ChevronRight, History, ListVideo, PlayCircle, Upload } from 'lucide-react'; // Added Upload
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -17,12 +17,13 @@ const mainNavItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/trending', label: 'Trending', icon: Flame },
   { href: '/subscriptions', label: 'Subscriptions', icon: Youtube },
-  { href: '/shorts', label: 'Shorts', icon: PlayCircle }, // Added Shorts link
+  { href: '/shorts', label: 'Shorts', icon: PlayCircle },
 ];
 
 const userNavItems = [ 
   { href: '/history', label: 'History', icon: History },
   { href: '/saved', label: 'Saved Videos', icon: ListVideo },
+  { href: '/upload', label: 'Upload Video', icon: Upload }, // New item
 ];
 
 interface AppSidebarNavProps {
