@@ -129,11 +129,7 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem disabled>Profile (soon)</DropdownMenuItem>
-          <DropdownMenuItem disabled>Settings (soon)</DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
+        {/* Removed Profile and Settings options */}
         <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
           Log out
