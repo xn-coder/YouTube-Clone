@@ -1,9 +1,11 @@
 
+'use client'; // Ensure this is a client module if it's used by client components
+
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth';
 // Changed to namespace import for firestore to access Blob and other functions
 import * as firestore from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+// The type Firestore will now be firestore.Firestore
 
 // These should be loaded from .env.local
 const firebaseConfig = {
@@ -47,52 +49,51 @@ try {
 }
 
 let authInstance: Auth;
-let dbInstance: Firestore;
-let FirestoreBlob: typeof firestore.Blob | undefined = undefined;
+let dbInstance: firestore.Firestore; // Use namespaced type
+let FirestoreBlobExport: typeof firestore.Blob | undefined = undefined; // Variable to hold the Blob constructor
 
+// Check if firestore.Blob is defined after namespace import
 if (firestore && typeof firestore.Blob !== 'undefined') {
-  FirestoreBlob = firestore.Blob;
+  FirestoreBlobExport = firestore.Blob;
 } else {
-  console.error(
-    "%cFirebase CRITICAL MODULE ERROR: `firestore.Blob` is undefined after importing `firebase/firestore`. " +
-    "This indicates a severe issue with the Firebase SDK module resolution or installation. " +
-    "Video upload functionality requiring Firestore Blob will be unavailable. " +
-    "Please try deleting node_modules, .next, and reinstalling dependencies (npm install).",
-    "color: red; font-size: 1.2em; font-weight: bold;"
-  );
+  if (typeof window !== 'undefined') { // Log this only in the browser
+    console.error(
+      "%cFirebase CRITICAL MODULE ERROR: `firestore.Blob` is undefined after importing `firebase/firestore`. " +
+      "This indicates a severe issue with the Firebase SDK module resolution or installation. " +
+      "Video upload functionality requiring Firestore Blob will be unavailable. " +
+      "Please try deleting node_modules, .next, and reinstalling dependencies (npm install).",
+      "color: red; font-size: 1.2em; font-weight: bold;"
+    );
+  }
 }
 
 
 if (app && app.name !== '[uninitialized]') {
   try {
     authInstance = getAuth(app);
-    // Explicitly set persistence to localStorage
-    setPersistence(authInstance, browserLocalPersistence)
-      .then(() => {
-        if (typeof window !== 'undefined') {
-          console.info("%cFirebase Auth persistence set to localStorage.", "color: blue;");
-        }
-      })
-      .catch((error) => {
-        if (typeof window !== 'undefined') {
-          console.error("Error setting Firebase Auth persistence to localStorage:", error);
-        }
-      });
-    dbInstance = firestore.getFirestore(app);
+    if (typeof window !== 'undefined') {
+      setPersistence(authInstance, browserLocalPersistence)
+        .then(() => {
+          if (typeof window !== 'undefined') console.info("%cFirebase Auth persistence set to localStorage.", "color: blue;");
+        })
+        .catch((error) => {
+          if (typeof window !== 'undefined') console.error("Error setting Firebase Auth persistence to localStorage:", error);
+        });
+    }
+    dbInstance = firestore.getFirestore(app); // Use namespaced getFirestore
   } catch (error) {
-    console.error("Firebase Error: Failed to initialize Auth or Firestore services after app initialization. This might be due to a misconfiguration that wasn't caught earlier.", error);
-    authInstance = {} as Auth; // Dummy objects
-    dbInstance = {} as Firestore;
+    if (typeof window !== 'undefined') console.error("Firebase Error: Failed to initialize Auth or Firestore services after app initialization. This might be due to a misconfiguration that wasn't caught earlier.", error);
+    authInstance = {} as Auth; 
+    dbInstance = {} as firestore.Firestore;
     isFirebasePotentiallyMisconfigured = true;
   }
 } else {
-  // If app initialization failed, provide dummy objects to prevent crashes
   authInstance = {} as Auth;
-  dbInstance = {} as Firestore;
-  if (typeof window !== 'undefined' && !isFirebasePotentiallyMisconfigured) {
+  dbInstance = {} as firestore.Firestore;
+  if (typeof window !== 'undefined' && !isFirebasePotentiallyMisconfigured) { 
       console.error("Firebase CRITICAL ERROR: Firebase app object is not available. Auth and Firestore will not work.");
       isFirebasePotentiallyMisconfigured = true;
   }
 }
 
-export { app as firebaseApp, authInstance as auth, dbInstance as db, FirestoreBlob };
+export { app as firebaseApp, authInstance as auth, dbInstance as db, FirestoreBlobExport as FirestoreBlob };
