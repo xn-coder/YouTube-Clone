@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
         hostname: 'yt3.ggpht.com', // Added for channel avatars
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'yt3.googleusercontent.com', // Added for channel banners and other user content
+        port: '',
+        pathname: '/**',
       }
     ],
   },
