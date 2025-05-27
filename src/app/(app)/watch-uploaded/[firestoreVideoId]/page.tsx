@@ -11,7 +11,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { formatPublishedAt, formatNumber } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
-import type { Blob as FirestoreBlob } from 'firebase/firestore'; // Import Firestore Blob type
 
 const WatchUploadedVideoPageSkeleton = () => (
   <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6 animate-pulse">
@@ -34,7 +33,6 @@ export default function WatchUploadedVideoPage() {
   const [video, setVideo] = useState<UserUploadedVideo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [videoDataB64, setVideoDataB64] = useState<string | null>(null);
 
   useEffect(() => {
     if (!firestoreVideoId) {
@@ -45,7 +43,6 @@ export default function WatchUploadedVideoPage() {
     const fetchVideo = async () => {
       setIsLoading(true);
       setError(null);
-      setVideoDataB64(null);
       try {
         const videoData = await getUploadedVideoById(firestoreVideoId);
         if (!videoData) {
@@ -56,16 +53,6 @@ export default function WatchUploadedVideoPage() {
         }
         setVideo(videoData);
         document.title = `${videoData.title} - Youtube Clone`;
-
-        // Convert Firestore Blob to Base64 for the player
-        if (videoData.videoDataBlob && typeof (videoData.videoDataBlob as any).toBase64 === 'function') {
-          const firestoreBlob = videoData.videoDataBlob as FirestoreBlob; // Cast to FirestoreBlob
-          setVideoDataB64(firestoreBlob.toBase64());
-        } else if (videoData.videoDataBlob) {
-          // Fallback if it's already a string (less likely with current upload logic)
-           console.warn("videoDataBlob is not a Firestore Blob object, attempting to use as Base64 string directly.");
-           setVideoDataB64(videoData.videoDataBlob as string);
-        }
 
       } catch (err) {
         console.error('Error fetching uploaded video:', err);
@@ -101,10 +88,9 @@ export default function WatchUploadedVideoPage() {
     <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="lg:w-2/3">
-          {videoDataB64 && video.fileType ? (
+          {video.videoUrl ? (
             <VideoPlayer
-              videoDataB64={videoDataB64}
-              videoFileType={video.fileType}
+              videoUrl={video.videoUrl} // Use videoUrl for Firebase Storage links
               title={video.title}
               posterUrl={video.thumbnailUrl}
             />

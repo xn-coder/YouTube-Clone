@@ -4,7 +4,7 @@
 import { fetchChannelData } from '@/lib/data';
 import type { Channel, UserUploadedVideo, WatchHistoryItem } from '@/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, collection, query, orderBy, getDocs, serverTimestamp, Timestamp, setDoc, where, limit, Blob as FirestoreBlob } from 'firebase/firestore';
+import { doc, getDoc, collection, query, orderBy, getDocs, serverTimestamp, Timestamp, setDoc, where, limit } from 'firebase/firestore';
 
 export interface ChannelPreview {
   id: string;
@@ -142,8 +142,8 @@ export async function getUserUploadedVideos(userId: string): Promise<UserUploade
         userId: data.userId,
         title: data.title,
         description: data.description,
-        videoDataBlob: data.videoDataBlob, // Keep as Firestore Blob type initially
-        fileType: data.fileType,
+        videoUrl: data.videoUrl,
+        videoStoragePath: data.videoStoragePath,
         thumbnailUrl: data.thumbnailUrl || 'https://placehold.co/320x180.png',
         fileName: data.fileName,
         fileSize: data.fileSize,
@@ -151,7 +151,7 @@ export async function getUserUploadedVideos(userId: string): Promise<UserUploade
         views: data.views || 0,
         likes: data.likes || 0,
         duration: data.duration,
-      } as UserUploadedVideo; // Type assertion, ensure fields match
+      } as UserUploadedVideo; 
     });
   } catch (error) {
     console.error(`Error fetching uploaded videos for user ${userId}:`, error);
@@ -176,8 +176,8 @@ export async function getUploadedVideoById(firestoreVideoId: string): Promise<Us
         userId: data.userId,
         title: data.title,
         description: data.description,
-        videoDataBlob: data.videoDataBlob, // Keep as Firestore Blob
-        fileType: data.fileType,
+        videoUrl: data.videoUrl,
+        videoStoragePath: data.videoStoragePath,
         thumbnailUrl: data.thumbnailUrl || 'https://placehold.co/320x180.png',
         fileName: data.fileName,
         fileSize: data.fileSize,
@@ -185,7 +185,7 @@ export async function getUploadedVideoById(firestoreVideoId: string): Promise<Us
         views: data.views || 0,
         likes: data.likes || 0,
         duration: data.duration,
-      } as UserUploadedVideo; // Type assertion
+      } as UserUploadedVideo; 
     } else {
       console.warn(`No uploaded video found with ID: ${firestoreVideoId}`);
       return null;

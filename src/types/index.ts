@@ -83,16 +83,15 @@ export interface PlaylistItem {
   videoPublishedAt?: string; 
 }
 
-// Updated for storing video data as Blob in Firestore
+// Updated for storing video files in Firebase Storage
 export interface UserUploadedVideo {
   id: string; // Firestore document ID
   userId: string;
   title: string;
   description: string;
-  videoDataBlob?: any; // Will be a Firestore Blob object when fetched.
-                       // Consider a more specific type if possible, but 'any' for simplicity here.
-  fileType: string; // MIME type of the video e.g., 'video/mp4'
-  thumbnailUrl: string; // URL or path to thumbnail (still a placeholder for now)
+  videoUrl: string; // URL from Firebase Storage
+  videoStoragePath: string; // Path in Firebase Storage
+  thumbnailUrl: string; // URL or path to thumbnail (can be a placeholder)
   fileName: string;
   fileSize: number; // Original file size
   createdAt: Date; // JS Date object
