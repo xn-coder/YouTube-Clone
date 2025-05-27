@@ -11,9 +11,9 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/Spinner';
 import { Logo } from '@/components/Logo';
-import { auth, db } from '@/lib/firebase'; // Import db
+import { auth, db } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore'; // Import Firestore functions
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'; // Import serverTimestamp
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignupPage() {
@@ -60,22 +60,21 @@ export default function SignupPage() {
       if (userCredential.user) {
         await sendEmailVerification(userCredential.user);
 
-        // Create user document in Firestore
         try {
           const userDocRef = doc(db, 'users', userCredential.user.uid);
           await setDoc(userDocRef, {
             uid: userCredential.user.uid,
             email: userCredential.user.email,
-            displayName: userCredential.user.displayName || '', // Firebase User obj might not have displayName immediately
+            displayName: userCredential.user.email?.split('@')[0] || '', // Default display name from email
             photoURL: userCredential.user.photoURL || '',
-            subscribedChannelIds: [], // Initialize with empty subscriptions
-            createdAt: new Date().toISOString(),
+            subscribedChannelIds: [],
+            likedVideoIds: [], // Initialize liked videos
+            dislikedVideoIds: [], // Initialize disliked videos
+            createdAt: serverTimestamp(), // Use Firestore server timestamp
           });
           console.log("User document created/updated in Firestore for UID:", userCredential.user.uid);
         } catch (firestoreError) {
           console.error("Error creating/updating user document in Firestore:", firestoreError);
-          // This error shouldn't block the signup success toast, but should be logged
-          // Optionally, you could inform the user that some profile setup failed.
         }
 
         toast({

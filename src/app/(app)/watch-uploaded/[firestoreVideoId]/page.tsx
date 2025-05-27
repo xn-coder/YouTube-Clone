@@ -1,0 +1,141 @@
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams, notFound, useRouter } from 'next/navigation';
+import { getUploadedVideoById } from '@/app/actions/user';
+import type { UserUploadedVideo } from '@/types';
+import { VideoPlayer } from '@/components/video/VideoPlayer';
+import { Loader2, VideoOff } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { formatPublishedAt, formatNumber } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
+// Note: AppCommentsList might need adaptation if comments are to be supported for uploaded videos.
+// For now, comments are not included on this page.
+
+const WatchUploadedVideoPageSkeleton = () => (
+  <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6 animate-pulse">
+    <div className="lg:w-2/3">
+      <div className="aspect-video w-full overflow-hidden rounded-xl bg-muted shadow-2xl mb-4"></div>
+      <div className="h-8 w-3/4 rounded bg-muted mb-2"></div>
+      <div className="h-5 w-1/2 rounded bg-muted mb-4"></div>
+      <div className="h-20 w-full rounded bg-muted"></div>
+    </div>
+  </div>
+);
+
+
+export default function WatchUploadedVideoPage() {
+  const params = useParams();
+  const router = useRouter();
+  const firestoreVideoId = typeof params.firestoreVideoId === 'string' ? params.firestoreVideoId : null;
+  
+  const { user, loading: authLoading } = useAuth();
+  const [video, setVideo] = useState<UserUploadedVideo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!firestoreVideoId) {
+      notFound();
+      return;
+    }
+
+    const fetchVideo = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const videoData = await getUploadedVideoById(firestoreVideoId);
+        if (!videoData) {
+          setError('Video not found.');
+          setVideo(null);
+          notFound();
+          return;
+        }
+        setVideo(videoData);
+        document.title = `${videoData.title} - Youtube Clone`;
+      } catch (err) {
+        console.error('Error fetching uploaded video:', err);
+        setError('Failed to load video data.');
+        setVideo(null);
+        notFound();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchVideo();
+  }, [firestoreVideoId]);
+
+  if (isLoading || authLoading) {
+    return <WatchUploadedVideoPageSkeleton />;
+  }
+
+  if (error || !video) {
+    // notFound() would have been called already if video is null from fetch
+    return (
+      <div className="container mx-auto px-4 py-6 flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] text-center">
+        <VideoOff className="h-24 w-24 text-destructive mb-4" />
+        <h1 className="text-2xl font-bold text-destructive mb-2">Video Not Found</h1>
+        <p className="text-muted-foreground mb-6">{error || "The video you are looking for does not exist or could not be loaded."}</p>
+        <Button onClick={() => router.push('/')}>Go to Homepage</Button>
+      </div>
+    );
+  }
+  
+  // Basic owner check (could be expanded if user profiles are implemented)
+  const isOwner = user && video.userId === user.uid;
+
+  return (
+    <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6">
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="lg:w-2/3">
+          <VideoPlayer
+            videoUrl={video.videoUrl} // Pass the direct video URL
+            title={video.title}
+            posterUrl={video.thumbnailUrl} // Pass poster if available
+          />
+          <div className="mt-4">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">{video.title}</h1>
+            <div className="mt-2 text-sm text-muted-foreground">
+              <span>Uploaded by: {isOwner ? "You" : `User ID ${video.userId.substring(0,6)}...`}</span>
+              <span className="mx-1.5">&bull;</span>
+              <span>Uploaded {formatPublishedAt(video.createdAt.toISOString())}</span>
+              <span className="mx-1.5">&bull;</span>
+              <span>{formatNumber(video.views)} views</span>
+            </div>
+            {/* Future: Add Edit/Delete buttons for owner */}
+            {/* {isOwner && (
+              <div className="mt-3 flex gap-2">
+                <Button variant="outline" size="sm">Edit Video</Button>
+                <Button variant="destructive" size="sm">Delete Video</Button>
+              </div>
+            )} */}
+
+            {video.description && (
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                <h3 className="text-md font-semibold text-foreground mb-1">Description</h3>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{video.description}</p>
+              </div>
+            )}
+            <Separator className="my-6" />
+            {/* Comments for uploaded videos are a separate feature. 
+                If implemented, AppCommentsList would be used here, possibly with a different 'scope' or 'type'
+                to distinguish from YouTube video comments.
+            */}
+            <p className="text-muted-foreground text-center py-4">Comments for uploaded videos are not yet available.</p>
+          </div>
+        </div>
+        <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit">
+           {/* Recommended videos section could list other videos by the same user, or popular uploaded videos.
+               For now, it's empty for uploaded videos. */}
+           <div className="bg-card p-4 rounded-lg shadow">
+             <h3 className="text-lg font-semibold text-card-foreground mb-3">More Videos</h3>
+             <p className="text-sm text-muted-foreground">Recommendations for uploaded videos coming soon.</p>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+}

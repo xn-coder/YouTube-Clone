@@ -17,7 +17,7 @@ import type { Video } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { recordWatchEvent } from '@/app/actions/user';
 import { AppCommentsList } from '@/components/video/AppCommentsList'; 
-import { toggleSaveVideo, isUserVideoSaved } from '@/app/actions/userInteractions';
+import { toggleSaveVideo, isUserVideoSaved, getVideoLikeStatus, toggleLikeVideo, toggleDislikeVideo } from '@/app/actions/userInteractions';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -29,9 +29,13 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
 
   const [video, setVideo] = useState<Video | null | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
+  
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [isLiked, setIsLiked] = useState(false);
+  const [isDisliked, setIsDisliked] = useState(false);
+  const [isLiking, setIsLiking] = useState(false); // For loading state of like/dislike action
 
   const { user, loading: authLoading } = useAuth();
   const hasRecordedWatchEvent = useRef(false);
@@ -49,7 +53,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
         if (!videoData) {
           setVideo(null); 
           setIsLoading(false);
-          notFound(); // Trigger notFound if videoData is null
+          notFound(); 
           return;
         }
         setVideo(videoData);
@@ -58,19 +62,22 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
         if (user && videoData) {
           const savedStatus = await isUserVideoSaved(user.uid, videoData.id);
           setIsSaved(savedStatus);
+          const likeStatus = await getVideoLikeStatus(user.uid, videoData.id);
+          setIsLiked(likeStatus.isLiked);
+          setIsDisliked(likeStatus.isDisliked);
         }
 
       } catch (error) {
         console.error("Error fetching video details:", error);
         setVideo(null); 
-        notFound(); // Trigger notFound on error as well
+        notFound(); 
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [cleanVideoId, user]); 
+  }, [cleanVideoId, user]); // Re-fetch like/save status if user changes
 
 
   useEffect(() => {
@@ -99,11 +106,9 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
                 "Example rule for watchHistory: match /users/{userId}/watchHistory/{historyEntryId} { allow read, write: if request.auth != null && request.auth.uid == userId; }"
               );
             }
-            // hasRecordedWatchEvent.current = false; // Decide if retries should be allowed
           }
         } catch (error) {
           console.error("WatchPage: Error calling recordWatchEvent:", error);
-          // hasRecordedWatchEvent.current = false; // Decide if retries should be allowed
         }
       } else {
         if (authLoading) console.log("WatchPage: Auth still loading, skipping watch event record attempt.");
@@ -160,6 +165,39 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
       });
   };
 
+  const handleLike = async () => {
+    if (!user || !video) {
+      toast({ title: "Login Required", description: "Please log in to like videos.", variant: "destructive" });
+      return;
+    }
+    setIsLiking(true);
+    const result = await toggleLikeVideo(user.uid, video.id);
+    if (result.success) {
+      setIsLiked(result.isLiked ?? false);
+      if (result.isLiked) setIsDisliked(false); // If liked, remove dislike
+    } else {
+      toast({ title: "Error", description: result.error || "Failed to like video.", variant: "destructive" });
+    }
+    setIsLiking(false);
+  };
+
+  const handleDislike = async () => {
+    if (!user || !video) {
+      toast({ title: "Login Required", description: "Please log in to dislike videos.", variant: "destructive" });
+      return;
+    }
+    setIsLiking(true); // Use same loading state for simplicity
+    const result = await toggleDislikeVideo(user.uid, video.id);
+    if (result.success) {
+      setIsDisliked(result.isDisliked ?? false);
+      if (result.isDisliked) setIsLiked(false); // If disliked, remove like
+    } else {
+      toast({ title: "Error", description: result.error || "Failed to dislike video.", variant: "destructive" });
+    }
+    setIsLiking(false);
+  };
+
+
   if (isLoading || (authLoading && video === undefined)) { 
     return (
       <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6 flex justify-center items-center min-h-[calc(100vh-10rem)]">
@@ -168,14 +206,11 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
     );
   }
 
-  // if video is explicitly null (meaning fetch attempt failed or returned no data), trigger notFound.
-  // This ensures that notFound is called after the loading state.
   if (video === null) { 
      notFound();
-     return null; // Keep this to satisfy TypeScript, though notFound will prevent further rendering.
+     return null; 
   }
 
-  // This check is a fallback, primary handling is now in fetchData.
   if (!video) { 
       notFound();
       return null;
@@ -213,11 +248,13 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <Button variant="outline" size="sm" title="Like (UI Only)">
-                    <ThumbsUp className="mr-1.5 h-4 w-4" /> {video.likeCount !== undefined ? formatNumber(video.likeCount) : 'Like'}
+                <Button variant="outline" size="sm" onClick={handleLike} disabled={isLiking || authLoading} title={isLiked ? "Unlike" : "Like"}>
+                    {isLiking && isLiked ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ThumbsUp className={`mr-1.5 h-4 w-4 ${isLiked ? 'fill-primary text-primary' : ''}`} />} 
+                    {video.likeCount !== undefined ? formatNumber(video.likeCount) : 'Like'}
                 </Button>
-                <Button variant="outline" size="sm" title="Dislike (UI Only)">
-                    <ThumbsDown className="mr-1.5 h-4 w-4" /> Dislike
+                <Button variant="outline" size="sm" onClick={handleDislike} disabled={isLiking || authLoading} title={isDisliked ? "Remove dislike" : "Dislike"}>
+                    {isLiking && isDisliked ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ThumbsDown className={`mr-1.5 h-4 w-4 ${isDisliked ? 'fill-primary text-primary' : ''}`} />} 
+                    Dislike
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleShare}><Share2 className="mr-1.5 h-4 w-4" /> Share</Button>
                 <Button variant="outline" size="sm" onClick={handleToggleSave} disabled={isSaving || authLoading}>
@@ -251,5 +288,4 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
     </div>
   );
 }
-
     

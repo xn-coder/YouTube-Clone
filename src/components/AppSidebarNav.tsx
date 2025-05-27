@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Flame, Youtube, UserCircle, ChevronRight, History, ListVideo, PlayCircle, Upload } from 'lucide-react'; // Added Upload
+import { Home, Flame, Youtube, UserCircle, ChevronRight, History, ListVideo, PlayCircle, Upload, Video as MyUploadsIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -23,7 +23,8 @@ const mainNavItems = [
 const userNavItems = [ 
   { href: '/history', label: 'History', icon: History },
   { href: '/saved', label: 'Saved Videos', icon: ListVideo },
-  { href: '/upload', label: 'Upload Video', icon: Upload }, // New item
+  { href: '/my-uploads', label: 'My Uploads', icon: MyUploadsIcon }, // New "My Uploads"
+  { href: '/upload', label: 'Upload Video', icon: Upload },
 ];
 
 interface AppSidebarNavProps {
@@ -58,7 +59,7 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
 
       setIsLoadingSubscriptions(true);
       try {
-        const previews = await getSubscribedChannelPreviews(user.uid || '');
+        const previews = await getSubscribedChannelPreviews(user.uid || undefined); // Pass undefined if no user.uid
         setSubscribedChannels(previews);
       } catch (error) {
         console.error("Failed to load subscriptions for sidebar:", error);
@@ -66,9 +67,11 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
       }
       setIsLoadingSubscriptions(false);
     }
+    
+    // Fetch subscriptions only if user is definitively logged in (not just authLoading is false)
     if (user) { 
       fetchSubscriptions();
-    } else if (!authLoading && !user) { 
+    } else if (!authLoading && !user) { // User is definitively logged out
       setSubscribedChannels([]);
       setIsLoadingSubscriptions(false);
     }
