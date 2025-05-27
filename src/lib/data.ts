@@ -21,13 +21,6 @@ interface PaginatedPlaylistsResponse {
   totalResults?: number;
 }
 
-// interface PaginatedPlaylistItemsResponse {
-//   playlistItems: PlaylistItem[];
-//   nextPageToken?: string;
-//   totalResults?: number;
-// }
-
-
 export async function fetchChannelData(channelIds: string[]): Promise<Map<string, Channel>> {
   if (!API_KEY) {
     console.warn('YOUTUBE_API_KEY is not set. Channel data may be incomplete.');
@@ -117,7 +110,7 @@ export const getVideos = async (maxResults: number = 20, pageToken?: string): Pr
   try {
     let url = `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&chart=mostPopular&regionCode=US&maxResults=${maxResults}&key=${API_KEY}`;
     if (pageToken) {
-      url += `&pageToken=${pageToken}`;
+      url += `&pageToken=${encodeURIComponent(pageToken)}`;
     }
     const response = await fetch(url);
 
@@ -182,7 +175,7 @@ export const searchVideos = async (query: string, maxResults: number = 20, pageT
   try {
     let searchUrl = `${API_BASE_URL}/search?part=snippet&q=${encodeURIComponent(trimmedQuery)}&maxResults=${maxResults}&type=video&key=${API_KEY}`;
     if (pageToken) {
-      searchUrl += `&pageToken=${pageToken}`;
+      searchUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
     }
     const searchResponse = await fetch(searchUrl);
 
@@ -262,15 +255,18 @@ export const getSubscribedVideos = async (userId: string, maxTotalResults: numbe
   }
 
   if (pageToken) {
-    console.warn("getSubscribedVideos: pageToken is present, returning empty to avoid re-fetching initial set in this simplified model.");
+    // This simplified model doesn't support true pagination across multiple subscribed channels' feeds.
+    // Returning empty for subsequent pages to avoid re-fetching/complex merging.
+    console.warn("getSubscribedVideos: pageToken is present, returning empty as pagination is simplified for this combined feed.");
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
 
   try {
     let allSubscribedVideos: Video[] = [];
+    // Adjust maxResultsPerChannel to aim for roughly maxTotalResults
     const maxResultsPerChannel = Math.max(5, Math.ceil(maxTotalResults / subscribedChannelIds.length));
 
-    const channelMap = await fetchChannelData(subscribedChannelIds);
+    const channelMap = await fetchChannelData(subscribedChannelIds); // Fetch all subscribed channel details once
 
     for (const channelId of subscribedChannelIds) {
       const response = await fetch(
@@ -286,6 +282,7 @@ export const getSubscribedVideos = async (userId: string, maxTotalResults: numbe
             );
             if (videosDetailsResponse.ok) {
               const videoDetailsData = await videosDetailsResponse.json();
+              // Pass the pre-fetched channelMap to transformVideoItem
               const transformed = await Promise.all(videoDetailsData.items.map((item: any) => transformVideoItem(item, channelMap)));
               allSubscribedVideos.push(...transformed);
             }
@@ -299,6 +296,7 @@ export const getSubscribedVideos = async (userId: string, maxTotalResults: numbe
     allSubscribedVideos.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     const finalVideos = allSubscribedVideos.slice(0, maxTotalResults);
 
+    // No reliable nextPageToken for this combined feed model
     return { videos: finalVideos, nextPageToken: undefined, totalResults: finalVideos.length };
   } catch (error) {
     console.error('Error fetching subscribed videos:', error);
@@ -439,7 +437,7 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
       return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
     }
 
-    const channelMap = await fetchChannelData([trimmedChannelId]);
+    const channelMap = await fetchChannelData([trimmedChannelId]); // Only need the current channel's details
 
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
     const orderedVideoItems = videoIds.map((id: string) => videosById.get(id)).filter(Boolean);
@@ -491,8 +489,125 @@ export async function getChannelPlaylists(channelId: string, maxResults: number 
   }
 }
 
-// Placeholder for fetching items within a playlist
-// export async function getPlaylistItems(playlistId: string, maxResults: number = 20, pageToken?: string): Promise<PaginatedPlaylistItemsResponse> {
-//   // Implementation would be similar to getChannelVideos but using playlistItems endpoint
-//   return { playlistItems: [], nextPageToken: undefined, totalResults: 0 };
-// }
+
+export async function getPlaylistDetails(playlistId: string): Promise<Playlist | undefined> {
+  const trimmedId = playlistId?.trim();
+  if (!API_KEY) {
+    console.error('YOUTUBE_API_KEY is not set. Returning undefined for getPlaylistDetails.');
+    return undefined;
+  }
+  if (!trimmedId) {
+    console.warn('getPlaylistDetails called with empty or whitespace ID. Returning undefined.');
+    return undefined;
+  }
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/playlists?part=snippet,contentDetails&id=${encodeURIComponent(trimmedId)}&key=${API_KEY}`
+    );
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`YouTube API Error (getPlaylistDetails for ID: ${trimmedId}):`, errorData.error?.message);
+      return undefined;
+    }
+    const data = await response.json();
+    if (!data.items || data.items.length === 0) {
+      console.warn(`No playlist found with ID: ${trimmedId}`);
+      return undefined;
+    }
+    
+    return transformPlaylistItemAPI(data.items[0]);
+  } catch (error) {
+    console.error(`Error fetching playlist details by ID (${trimmedId}):`, error);
+    return undefined;
+  }
+}
+
+
+export async function getPlaylistItems(playlistId: string, maxResults: number = 20, pageToken?: string): Promise<PaginatedVideosResponse> {
+  const trimmedPlaylistId = playlistId?.trim();
+  if (!API_KEY) {
+    console.error('YOUTUBE_API_KEY is not set. Returning empty for getPlaylistItems.');
+    return { videos: [], nextPageToken: undefined, totalResults: 0 };
+  }
+  if (!trimmedPlaylistId) {
+    console.warn('getPlaylistItems called with empty or whitespace playlistId. Returning empty.');
+    return { videos: [], nextPageToken: undefined, totalResults: 0 };
+  }
+
+  try {
+    // 1. Fetch video IDs from the playlistItems endpoint
+    let playlistItemsUrl = `${API_BASE_URL}/playlistItems?part=snippet,contentDetails&playlistId=${encodeURIComponent(trimmedPlaylistId)}&maxResults=${maxResults}&key=${API_KEY}`;
+    if (pageToken) {
+      playlistItemsUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
+    }
+    const playlistItemsResponse = await fetch(playlistItemsUrl);
+
+    if (!playlistItemsResponse.ok) {
+      const errorData = await playlistItemsResponse.json();
+      console.error(`YouTube API Error (getPlaylistItems - fetching item IDs for playlist ${trimmedPlaylistId}):`, errorData.error?.message);
+      return { videos: [], nextPageToken: undefined, totalResults: 0 };
+    }
+    const playlistItemsData = await playlistItemsResponse.json();
+
+    if (!playlistItemsData.items || playlistItemsData.items.length === 0) {
+      return { videos: [], nextPageToken: playlistItemsData.nextPageToken, totalResults: playlistItemsData.pageInfo?.totalResults || 0 };
+    }
+
+    const videoIds = playlistItemsData.items
+      .map((item: any) => item.contentDetails?.videoId)
+      .filter(Boolean);
+
+    if (videoIds.length === 0) {
+      // Playlist might contain non-video items or items that are no longer available
+      return { videos: [], nextPageToken: playlistItemsData.nextPageToken, totalResults: playlistItemsData.pageInfo?.totalResults || 0 };
+    }
+
+    // 2. Fetch full video details for these video IDs
+    const videosResponse = await fetch(
+      `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(',')}&key=${API_KEY}`
+    );
+
+    if (!videosResponse.ok) {
+      const errorData = await videosResponse.json();
+      console.error(`YouTube API Error (getPlaylistItems - fetching video details for playlist ${trimmedPlaylistId}):`, errorData.error?.message);
+      // As a fallback, we might not have full video details, but can try to construct partial videos from playlistItem snippets if needed.
+      // For now, returning empty on error to keep it simpler.
+      return { videos: [], nextPageToken: playlistItemsData.nextPageToken, totalResults: playlistItemsData.pageInfo?.totalResults || 0 };
+    }
+    const videosData = await videosResponse.json();
+    if (!videosData.items) {
+      return { videos: [], nextPageToken: playlistItemsData.nextPageToken, totalResults: playlistItemsData.pageInfo?.totalResults || 0 };
+    }
+    
+    // 3. Merge and transform data
+    const channelIds = [...new Set(videosData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
+    const channelMap = await fetchChannelData(channelIds);
+    
+    // Create a map of video details by ID for quick lookup
+    const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
+    
+    // Order videos according to playlistItems order and transform
+    const orderedVideoItems = playlistItemsData.items.map((playlistItem: any) => {
+        const videoDetail = videosById.get(playlistItem.contentDetails?.videoId);
+        if (videoDetail) {
+            // Optionally, add playlist item specific info like position if needed by VideoCard
+            // For now, transformVideoItem will handle creating the Video object
+            return videoDetail; 
+        }
+        return null; // Video details might be missing if video was deleted/private
+    }).filter(Boolean);
+
+
+    const videos = await Promise.all(orderedVideoItems.map((item: any) => transformVideoItem(item, channelMap)));
+    
+    return { 
+      videos, 
+      nextPageToken: playlistItemsData.nextPageToken, 
+      totalResults: playlistItemsData.pageInfo?.totalResults 
+    };
+
+  } catch (error) {
+    console.error(`Error fetching items for playlist ID (${trimmedPlaylistId}):`, error);
+    return { videos: [], nextPageToken: undefined, totalResults: 0 };
+  }
+}
