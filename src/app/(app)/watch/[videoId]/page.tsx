@@ -49,9 +49,11 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
         if (!videoData) {
           setVideo(null); 
           setIsLoading(false);
+          notFound(); // Trigger notFound if videoData is null
           return;
         }
         setVideo(videoData);
+        document.title = `${videoData.title} - Youtube Clone`;
 
         if (user && videoData) {
           const savedStatus = await isUserVideoSaved(user.uid, videoData.id);
@@ -61,6 +63,7 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
       } catch (error) {
         console.error("Error fetching video details:", error);
         setVideo(null); 
+        notFound(); // Trigger notFound on error as well
       } finally {
         setIsLoading(false);
       }
@@ -96,11 +99,11 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
                 "Example rule for watchHistory: match /users/{userId}/watchHistory/{historyEntryId} { allow read, write: if request.auth != null && request.auth.uid == userId; }"
               );
             }
-            // hasRecordedWatchEvent.current = false; 
+            // hasRecordedWatchEvent.current = false; // Decide if retries should be allowed
           }
         } catch (error) {
           console.error("WatchPage: Error calling recordWatchEvent:", error);
-          // hasRecordedWatchEvent.current = false; 
+          // hasRecordedWatchEvent.current = false; // Decide if retries should be allowed
         }
       } else {
         if (authLoading) console.log("WatchPage: Auth still loading, skipping watch event record attempt.");
@@ -145,26 +148,9 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
     }
   };
 
-  const handleShare = async () => {
-    if (video && navigator.share) {
-      try {
-        await navigator.share({
-          title: video.title,
-          text: `Check out this video: ${video.title}`,
-          url: window.location.href,
-        });
-        toast({ title: "Shared!", description: "Video link shared." });
-      } catch (error) {
-        console.error('Error sharing:', error);
-        copyLinkToClipboard(); 
-      }
-    } else {
-      copyLinkToClipboard();
-    }
-  };
-
-  const copyLinkToClipboard = () => {
-     navigator.clipboard.writeText(window.location.href)
+  const handleShare = () => {
+    if (!video) return;
+    navigator.clipboard.writeText(window.location.href)
       .then(() => {
         toast({ title: "Link Copied!", description: "Video link copied to clipboard." });
       })
@@ -174,7 +160,6 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
       });
   };
 
-
   if (isLoading || (authLoading && video === undefined)) { 
     return (
       <div className="container mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 lg:px-6 flex justify-center items-center min-h-[calc(100vh-10rem)]">
@@ -183,11 +168,14 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
     );
   }
 
+  // if video is explicitly null (meaning fetch attempt failed or returned no data), trigger notFound.
+  // This ensures that notFound is called after the loading state.
   if (video === null) { 
      notFound();
-     return null; 
+     return null; // Keep this to satisfy TypeScript, though notFound will prevent further rendering.
   }
 
+  // This check is a fallback, primary handling is now in fetchData.
   if (!video) { 
       notFound();
       return null;
@@ -225,8 +213,12 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <Button variant="outline" size="sm"><ThumbsUp className="mr-1.5 h-4 w-4" /> {video.likeCount !== undefined ? formatNumber(video.likeCount) : 'Like'}</Button>
-                <Button variant="outline" size="sm"><ThumbsDown className="mr-1.5 h-4 w-4" /> Dislike</Button>
+                <Button variant="outline" size="sm" title="Like (UI Only)">
+                    <ThumbsUp className="mr-1.5 h-4 w-4" /> {video.likeCount !== undefined ? formatNumber(video.likeCount) : 'Like'}
+                </Button>
+                <Button variant="outline" size="sm" title="Dislike (UI Only)">
+                    <ThumbsDown className="mr-1.5 h-4 w-4" /> Dislike
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleShare}><Share2 className="mr-1.5 h-4 w-4" /> Share</Button>
                 <Button variant="outline" size="sm" onClick={handleToggleSave} disabled={isSaving || authLoading}>
                   {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ListPlus className="mr-1.5 h-4 w-4" />}
@@ -243,7 +235,6 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
 
             <Separator className="my-6" />
 
-            {/* App-specific comments section */}
             {cleanVideoId && (
               <AppCommentsList 
                 videoId={cleanVideoId} 
@@ -254,7 +245,6 @@ export default function WatchPage({ params: paramsProp }: { params: { videoId: s
         </div>
 
         <div className="lg:w-1/3 lg:sticky lg:top-20 h-fit">
-          {/* Ensure cleanVideoId is passed for recommendations */}
           {cleanVideoId && <RecommendedVideos videoId={cleanVideoId} />}
         </div>
       </div>
