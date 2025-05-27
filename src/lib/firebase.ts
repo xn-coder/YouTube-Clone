@@ -1,7 +1,9 @@
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+// Changed to namespace import for firestore to access Blob and other functions
+import * as firestore from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 
 // These should be loaded from .env.local
 const firebaseConfig = {
@@ -44,14 +46,17 @@ try {
   isFirebasePotentiallyMisconfigured = true; // Mark as misconfigured if init fails
 }
 
-let auth: Auth;
-let db: Firestore;
+let authInstance: Auth;
+let dbInstance: Firestore;
+// Use the Blob from the main firestore namespace import
+const FirestoreBlob = firestore.Blob;
+
 
 if (app && app.name !== '[uninitialized]') {
   try {
-    auth = getAuth(app);
+    authInstance = getAuth(app);
     // Explicitly set persistence to localStorage
-    setPersistence(auth, browserLocalPersistence)
+    setPersistence(authInstance, browserLocalPersistence)
       .then(() => {
         if (typeof window !== 'undefined') {
           console.info("%cFirebase Auth persistence set to localStorage.", "color: blue;");
@@ -62,22 +67,21 @@ if (app && app.name !== '[uninitialized]') {
           console.error("Error setting Firebase Auth persistence to localStorage:", error);
         }
       });
-    db = getFirestore(app);
+    dbInstance = firestore.getFirestore(app);
   } catch (error) {
     console.error("Firebase Error: Failed to initialize Auth or Firestore services after app initialization. This might be due to a misconfiguration that wasn't caught earlier.", error);
-    auth = {} as Auth; // Dummy objects
-    db = {} as Firestore;
+    authInstance = {} as Auth; // Dummy objects
+    dbInstance = {} as Firestore;
     isFirebasePotentiallyMisconfigured = true;
   }
 } else {
   // If app initialization failed, provide dummy objects to prevent crashes
-  auth = {} as Auth;
-  db = {} as Firestore;
+  authInstance = {} as Auth;
+  dbInstance = {} as Firestore;
   if (typeof window !== 'undefined' && !isFirebasePotentiallyMisconfigured) {
-      // This case (app uninitialized but not caught by earlier checks) is unlikely but good to flag.
       console.error("Firebase CRITICAL ERROR: Firebase app object is not available. Auth and Firestore will not work.");
       isFirebasePotentiallyMisconfigured = true;
   }
 }
 
-export { app as firebaseApp, auth, db }; // Export app as firebaseApp
+export { app as firebaseApp, authInstance as auth, dbInstance as db, FirestoreBlob };

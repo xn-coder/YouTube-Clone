@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, UploadCloud } from 'lucide-react';
-// Attempting direct import from @firebase/firestore
-import { Blob as FirestoreBlob, collection, addDoc, serverTimestamp } from '@firebase/firestore'; 
-import { db } from '@/lib/firebase'; 
+// Import Firestore functions directly, and FirestoreBlob from our firebase.ts
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'; 
+import { db, FirestoreBlob } from '@/lib/firebase'; 
 import { Progress } from '@/components/ui/progress';
 
 // Firestore document size limit is 1 MiB.
@@ -30,7 +30,7 @@ export default function UploadPage() {
   const [description, setDescription] = useState('');
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); // Keep for visual, though it'll be quick
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   if (authLoading) {
     return <div className="container mx-auto px-4 py-6 flex justify-center items-center min-h-[calc(100vh-10rem)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
@@ -104,16 +104,17 @@ export default function UploadPage() {
         if (e.target?.result && e.target.result instanceof ArrayBuffer) {
           const arrayBuffer = e.target.result;
           const uint8Array = new Uint8Array(arrayBuffer);
-          // Use Blob directly if imported without alias
+          
+          // Use FirestoreBlob from our re-export in firebase.ts
           const videoDataBlob = FirestoreBlob.fromUint8Array(uint8Array);
 
           await addDoc(collection(db, 'userUploadedVideos'), {
             userId: user.uid,
             title,
             description,
-            videoDataBlob, // Store the Blob object
-            fileType: videoFile.type, // Store MIME type
-            thumbnailUrl: 'https://placehold.co/320x180.png', // Placeholder
+            videoDataBlob, 
+            fileType: videoFile.type, 
+            thumbnailUrl: 'https://placehold.co/320x180.png', 
             fileName: videoFile.name,
             fileSize: videoFile.size,
             createdAt: serverTimestamp(),
