@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Flame, Youtube, UserCircle, ChevronRight, History, ListVideo } from 'lucide-react'; // Added History, ListVideo icons
+import { Home, Flame, Youtube, UserCircle, ChevronRight, History, ListVideo, PlayCircle } from 'lucide-react'; // Added PlayCircle
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -17,11 +17,12 @@ const mainNavItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/trending', label: 'Trending', icon: Flame },
   { href: '/subscriptions', label: 'Subscriptions', icon: Youtube },
+  { href: '/shorts', label: 'Shorts', icon: PlayCircle }, // Added Shorts link
 ];
 
 const userNavItems = [ 
   { href: '/history', label: 'History', icon: History },
-  { href: '/saved', label: 'Saved Videos', icon: ListVideo }, // Added Saved Videos
+  { href: '/saved', label: 'Saved Videos', icon: ListVideo },
 ];
 
 interface AppSidebarNavProps {
@@ -56,7 +57,6 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
 
       setIsLoadingSubscriptions(true);
       try {
-        // Ensure user.uid is passed, default to empty string if user is somehow null
         const previews = await getSubscribedChannelPreviews(user.uid || '');
         setSubscribedChannels(previews);
       } catch (error) {
@@ -65,9 +65,9 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
       }
       setIsLoadingSubscriptions(false);
     }
-    if (user) { // Only fetch if user is definitively logged in
+    if (user) { 
       fetchSubscriptions();
-    } else if (!authLoading && !user) { // If auth is done loading and there's no user
+    } else if (!authLoading && !user) { 
       setSubscribedChannels([]);
       setIsLoadingSubscriptions(false);
     }
@@ -92,14 +92,13 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
         </Button>
       ))}
 
-      {/* Conditional rendering for user-specific items */}
       {!authLoading && user && (
         <>
           <Separator className="my-3" />
           {userNavItems.map((item) => (
             <Button
               key={item.label}
-              variant={pathname.startsWith(item.href) ? 'secondary' : 'ghost'} // Use startsWith for active state on sub-routes
+              variant={pathname.startsWith(item.href) ? 'secondary' : 'ghost'}
               className="justify-start"
               asChild
             >
@@ -159,7 +158,6 @@ export function AppSidebarNav({ isMobile = false, className }: AppSidebarNavProp
           )}
         </>
       )}
-      {/* Display login prompt in sidebar if not mobile, not loading, and no user */}
       {!isMobile && !authLoading && !user && (
         <>
           <Separator className="my-3" />
