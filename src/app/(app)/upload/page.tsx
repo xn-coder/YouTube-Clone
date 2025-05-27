@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, UploadCloud } from 'lucide-react';
-// Reordered imports from firebase/firestore
-import { Blob as FirestoreBlob, collection, addDoc, serverTimestamp } from 'firebase/firestore'; 
+// Attempting direct import from @firebase/firestore
+import { Blob as FirestoreBlob, collection, addDoc, serverTimestamp } from '@firebase/firestore'; 
 import { db } from '@/lib/firebase'; 
 import { Progress } from '@/components/ui/progress';
 
