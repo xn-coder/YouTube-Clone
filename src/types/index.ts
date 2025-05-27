@@ -56,3 +56,30 @@ export interface SavedVideoItem {
   channelName: string;
   savedAt: Date; // JS Date object, from Firestore Timestamp
 }
+
+export interface Playlist {
+  id: string;
+  title: string;
+  description?: string;
+  thumbnailUrl: string;
+  channelId: string;
+  channelTitle: string;
+  videoCount: number;
+  publishedAt: string; // ISO date string
+}
+
+export interface PlaylistItem {
+  id: string; // This is the playlist item ID from YouTube API, not the video ID
+  playlistId: string;
+  videoId: string;
+  title: string;
+  description?: string;
+  thumbnailUrl: string;
+  channelId: string; // Channel that owns the playlist
+  channelTitle: string; // Channel that owns the playlist
+  videoOwnerChannelId?: string; // Channel that owns the video
+  videoOwnerChannelTitle?: string; // Channel that owns the video
+  position: number;
+  publishedAt: string; // When the video was added to the playlist
+  videoPublishedAt?: string; // When the video itself was published
+}

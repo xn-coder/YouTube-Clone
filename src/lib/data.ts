@@ -1,7 +1,7 @@
 
 'use server';
 
-import type { Video, Comment, Channel } from '@/types';
+import type { Video, Channel, Playlist, PlaylistItem } from '@/types';
 import { formatNumber, parseISO8601Duration, formatPublishedAt } from '@/lib/utils';
 import { db } from '@/lib/firebase'; // Import Firestore db instance
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,11 +15,18 @@ interface PaginatedVideosResponse {
   totalResults?: number;
 }
 
-interface PaginatedCommentsResponse {
-  comments: Comment[];
+interface PaginatedPlaylistsResponse {
+  playlists: Playlist[];
   nextPageToken?: string;
   totalResults?: number;
 }
+
+// interface PaginatedPlaylistItemsResponse {
+//   playlistItems: PlaylistItem[];
+//   nextPageToken?: string;
+//   totalResults?: number;
+// }
+
 
 export async function fetchChannelData(channelIds: string[]): Promise<Map<string, Channel>> {
   if (!API_KEY) {
@@ -35,10 +42,10 @@ export async function fetchChannelData(channelIds: string[]): Promise<Map<string
     if (!response.ok) {
       const errorData = await response.json();
       console.error('YouTube API Error (fetchChannelData):', errorData.error?.message);
-      return new Map(); 
+      return new Map();
     }
     const data = await response.json();
-    
+
     const channelMap = new Map<string, Channel>();
     data.items?.forEach((item: any) => {
       channelMap.set(item.id, {
@@ -65,7 +72,7 @@ async function transformVideoItem(item: any, channelMap: Map<string, Channel>): 
     const singleChannelMap = await fetchChannelData([channelId]);
     channel = singleChannelMap.get(channelId);
   }
-  
+
   const videoId = typeof item.id === 'string' ? item.id : item.id?.videoId;
 
   return {
@@ -73,11 +80,11 @@ async function transformVideoItem(item: any, channelMap: Map<string, Channel>): 
     title: item.snippet?.title || 'Untitled Video',
     thumbnailUrl: item.snippet?.thumbnails?.medium?.url || 'https://placehold.co/360x200.png',
     highQualityThumbnailUrl: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.standard?.url || item.snippet?.thumbnails?.medium?.url,
-    channel: channel || { 
-      id: channelId || 'unknown', 
-      name: item.snippet?.channelTitle || 'Unknown Channel', 
-      avatarUrl: `https://placehold.co/40x40.png`, 
-      subscribers: 0 
+    channel: channel || {
+      id: channelId || 'unknown',
+      name: item.snippet?.channelTitle || 'Unknown Channel',
+      avatarUrl: `https://placehold.co/40x40.png`,
+      subscribers: 0
     },
     views: parseInt(item.statistics?.viewCount || '0', 10),
     uploadDate: formatPublishedAt(item.snippet?.publishedAt),
@@ -87,6 +94,20 @@ async function transformVideoItem(item: any, channelMap: Map<string, Channel>): 
     likeCount: parseInt(item.statistics?.likeCount || '0', 10),
   };
 }
+
+function transformPlaylistItemAPI(item: any): Playlist {
+  return {
+    id: item.id,
+    title: item.snippet?.title || 'Untitled Playlist',
+    description: item.snippet?.description,
+    thumbnailUrl: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || 'https://placehold.co/320x180.png',
+    channelId: item.snippet?.channelId,
+    channelTitle: item.snippet?.channelTitle || 'Unknown Channel',
+    videoCount: item.contentDetails?.itemCount || 0,
+    publishedAt: item.snippet?.publishedAt, // ISO date string
+  };
+}
+
 
 export const getVideos = async (maxResults: number = 20, pageToken?: string): Promise<PaginatedVideosResponse> => {
   if (!API_KEY) {
@@ -110,7 +131,7 @@ export const getVideos = async (maxResults: number = 20, pageToken?: string): Pr
 
     const channelIds = [...new Set(data.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
     const channelMap = await fetchChannelData(channelIds);
-    
+
     const videos = await Promise.all(data.items.map((item: any) => transformVideoItem(item, channelMap)));
     return { videos, nextPageToken: data.nextPageToken, totalResults: data.pageInfo?.totalResults };
 
@@ -127,8 +148,8 @@ export const getVideoById = async (id: string): Promise<Video | undefined> => {
     return undefined;
   }
   if (!trimmedId) {
-      console.warn('getVideoById called with empty or whitespace ID. Returning undefined.');
-      return undefined;
+    console.warn('getVideoById called with empty or whitespace ID. Returning undefined.');
+    return undefined;
   }
   try {
     const response = await fetch(
@@ -141,7 +162,7 @@ export const getVideoById = async (id: string): Promise<Video | undefined> => {
     }
     const data = await response.json();
     if (!data.items || data.items.length === 0) return undefined;
-    
+
     return transformVideoItem(data.items[0], new Map());
   } catch (error) {
     console.error(`Error fetching video by ID (${trimmedId}):`, error);
@@ -149,69 +170,6 @@ export const getVideoById = async (id: string): Promise<Video | undefined> => {
   }
 };
 
-export const getCommentsByVideoId = async (videoId: string, maxResults: number = 20, pageToken?: string): Promise<PaginatedCommentsResponse> => {
-  const trimmedVideoId = videoId?.trim();
-  if (!API_KEY) {
-    console.error('YOUTUBE_API_KEY is not set. Returning empty for getCommentsByVideoId.');
-    return { comments: [], nextPageToken: undefined, totalResults: 0 };
-  }
-  if (!trimmedVideoId) {
-    console.warn('getCommentsByVideoId called with empty or whitespace videoId. Returning empty.');
-    return { comments: [], nextPageToken: undefined, totalResults: 0 };
-  }
-  try {
-    let url = `${API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${encodeURIComponent(trimmedVideoId)}&maxResults=${maxResults}&textFormat=html&key=${API_KEY}`;
-    if (pageToken) {
-      url += `&pageToken=${pageToken}`;
-    }
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`YouTube API Error (getCommentsByVideoId for videoId: ${trimmedVideoId}):`, errorData.error?.message);
-      return { comments: [], nextPageToken: undefined, totalResults: 0 };
-    }
-    const data = await response.json();
-
-    const comments = data.items?.map((item: any): Comment => {
-      const topLevelComment = item.snippet?.topLevelComment?.snippet;
-      return {
-        id: item.snippet?.topLevelComment?.id,
-        videoId: topLevelComment?.videoId,
-        user: {
-          name: topLevelComment?.authorDisplayName || 'User',
-          avatarUrl: topLevelComment?.authorProfileImageUrl || 'https://placehold.co/32x32.png',
-          channelId: topLevelComment?.authorChannelId?.value,
-        },
-        text: topLevelComment?.textDisplay || '', 
-        timestamp: formatPublishedAt(topLevelComment?.publishedAt),
-        publishedAt: topLevelComment?.publishedAt,
-        likes: parseInt(topLevelComment?.likeCount || '0', 10),
-        replyCount: parseInt(item.snippet?.totalReplyCount || '0', 10),
-        replies: item.replies?.comments?.map((replyItem: any): Comment => {
-          const replySnippet = replyItem.snippet;
-          return {
-            id: replyItem.id,
-            videoId: replySnippet?.videoId,
-            user: {
-              name: replySnippet?.authorDisplayName || 'User',
-              avatarUrl: replySnippet?.authorProfileImageUrl || 'https://placehold.co/24x24.png',
-              channelId: replySnippet?.authorChannelId?.value,
-            },
-            text: replySnippet?.textDisplay || '',
-            timestamp: formatPublishedAt(replySnippet?.publishedAt),
-            publishedAt: replySnippet?.publishedAt,
-            likes: parseInt(replySnippet?.likeCount || '0', 10),
-          };
-        }) || [],
-      };
-    }) || [];
-    return { comments, nextPageToken: data.nextPageToken, totalResults: data.pageInfo?.totalResults };
-  } catch (error) {
-    console.error(`Error fetching comments for video ID (${trimmedVideoId}):`, error);
-    return { comments: [], nextPageToken: undefined, totalResults: 0 };
-  }
-};
 
 export const searchVideos = async (query: string, maxResults: number = 20, pageToken?: string): Promise<PaginatedVideosResponse> => {
   const trimmedQuery = query?.trim();
@@ -220,7 +178,7 @@ export const searchVideos = async (query: string, maxResults: number = 20, pageT
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
   if (!trimmedQuery) return getVideos(maxResults, pageToken);
-  
+
   try {
     let searchUrl = `${API_BASE_URL}/search?part=snippet&q=${encodeURIComponent(trimmedQuery)}&maxResults=${maxResults}&type=video&key=${API_KEY}`;
     if (pageToken) {
@@ -256,9 +214,9 @@ export const searchVideos = async (query: string, maxResults: number = 20, pageT
     }
     const videosData = await videosResponse.json();
     if (!videosData.items) {
-        return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
+      return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
     }
-    
+
     const channelIds = [...new Set(videosData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
     const channelMap = await fetchChannelData(channelIds);
 
@@ -302,13 +260,7 @@ export const getSubscribedVideos = async (userId: string, maxTotalResults: numbe
   if (subscribedChannelIds.length === 0) {
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
-  
-  // Note: True pagination for a combined feed from multiple YouTube channels (based on pageToken) is complex.
-  // This implementation fetches a batch from each subscribed channel and sorts them.
-  // A more robust pagination would ideally involve a backend that aggregates and cursors this data.
-  // For now, if a pageToken is provided, we'll assume it's for a subsequent conceptual "page"
-  // but the API calls to YouTube won't directly use it in a way that perfectly paginates the combined feed.
-  // We'll return an empty set if pageToken is present to avoid re-fetching the same initial set.
+
   if (pageToken) {
     console.warn("getSubscribedVideos: pageToken is present, returning empty to avoid re-fetching initial set in this simplified model.");
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
@@ -317,30 +269,27 @@ export const getSubscribedVideos = async (userId: string, maxTotalResults: numbe
   try {
     let allSubscribedVideos: Video[] = [];
     const maxResultsPerChannel = Math.max(5, Math.ceil(maxTotalResults / subscribedChannelIds.length));
-    
-    const channelMap = await fetchChannelData(subscribedChannelIds); // Get details for all subscribed channels once
+
+    const channelMap = await fetchChannelData(subscribedChannelIds);
 
     for (const channelId of subscribedChannelIds) {
-      // Fetch latest videos for each channel
-      // We are not using a pageToken per channel here for simplicity in this combined feed.
       const response = await fetch(
         `${API_BASE_URL}/search?part=snippet&channelId=${encodeURIComponent(channelId)}&maxResults=${maxResultsPerChannel}&order=date&type=video&key=${API_KEY}`
       );
       if (response.ok) {
         const data = await response.json();
         if (data.items) {
-           const videoIds = data.items.map((item: any) => item.id?.videoId).filter(Boolean);
-           if (videoIds.length > 0) {
-             const videosDetailsResponse = await fetch(
-               `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(',')}&key=${API_KEY}`
-             );
-             if(videosDetailsResponse.ok) {
-                const videoDetailsData = await videosDetailsResponse.json();
-                // Use the pre-fetched channelMap for transformVideoItem
-                const transformed = await Promise.all(videoDetailsData.items.map((item: any) => transformVideoItem(item, channelMap)));
-                allSubscribedVideos.push(...transformed);
-             }
-           }
+          const videoIds = data.items.map((item: any) => item.id?.videoId).filter(Boolean);
+          if (videoIds.length > 0) {
+            const videosDetailsResponse = await fetch(
+              `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(',')}&key=${API_KEY}`
+            );
+            if (videosDetailsResponse.ok) {
+              const videoDetailsData = await videosDetailsResponse.json();
+              const transformed = await Promise.all(videoDetailsData.items.map((item: any) => transformVideoItem(item, channelMap)));
+              allSubscribedVideos.push(...transformed);
+            }
+          }
         }
       } else {
         const errorData = await response.json();
@@ -349,8 +298,7 @@ export const getSubscribedVideos = async (userId: string, maxTotalResults: numbe
     }
     allSubscribedVideos.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     const finalVideos = allSubscribedVideos.slice(0, maxTotalResults);
-    
-    // No reliable nextPageToken for this combined feed strategy
+
     return { videos: finalVideos, nextPageToken: undefined, totalResults: finalVideos.length };
   } catch (error) {
     console.error('Error fetching subscribed videos:', error);
@@ -371,7 +319,7 @@ export const getRecommendedVideos = async (videoId: string, maxResults: number =
   try {
     let searchUrl = `${API_BASE_URL}/search?part=snippet&relatedToVideoId=${encodeURIComponent(trimmedVideoId)}&type=video&maxResults=${maxResults}&key=${API_KEY}`;
     if (pageToken) {
-      searchUrl += `&pageToken=${pageToken}`;
+      searchUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
     }
     const searchResponse = await fetch(searchUrl);
 
@@ -393,26 +341,26 @@ export const getRecommendedVideos = async (videoId: string, maxResults: number =
     if (videoIds.length === 0) {
       return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults || 0 };
     }
-    
+
     const videosResponse = await fetch(
       `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(',')}&key=${API_KEY}`
     );
     if (!videosResponse.ok) {
-        const errorData = await videosResponse.json();
-        console.error(`YouTube API Error (getRecommendedVideos - videos for relatedToVideoId: ${trimmedVideoId}):`, errorData.error?.message);
-        const channelIdsFromSearch = [...new Set(searchData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
-        const channelMapFromSearch = await fetchChannelData(channelIdsFromSearch);
-        const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapFromSearch)));
-        return { videos: fallbackVideos, nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
+      const errorData = await videosResponse.json();
+      console.error(`YouTube API Error (getRecommendedVideos - videos for relatedToVideoId: ${trimmedVideoId}):`, errorData.error?.message);
+      const channelIdsFromSearch = [...new Set(searchData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
+      const channelMapFromSearch = await fetchChannelData(channelIdsFromSearch);
+      const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapFromSearch)));
+      return { videos: fallbackVideos, nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
     }
     const videosData = await videosResponse.json();
-     if (!videosData.items) {
-        return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
-     }
+    if (!videosData.items) {
+      return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
+    }
 
     const channelIds = [...new Set(videosData.items.map((item: any) => item.snippet?.channelId).filter(Boolean))];
     const channelMap = await fetchChannelData(channelIds);
-    
+
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
     const orderedVideoItems = videoIds.map((id: string) => videosById.get(id)).filter(Boolean);
 
@@ -445,8 +393,8 @@ export async function getChannelDetails(channelId: string): Promise<Channel | un
 }
 
 export async function getChannelVideos(channelId: string, maxResults: number = 20, pageToken?: string): Promise<PaginatedVideosResponse> {
-   const trimmedChannelId = channelId?.trim();
-   if (!API_KEY) {
+  const trimmedChannelId = channelId?.trim();
+  if (!API_KEY) {
     console.error('YOUTUBE_API_KEY is not set. Returning empty for getChannelVideos.');
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
@@ -457,7 +405,7 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
   try {
     let searchUrl = `${API_BASE_URL}/search?part=snippet&channelId=${encodeURIComponent(trimmedChannelId)}&maxResults=${maxResults}&order=date&type=video&key=${API_KEY}`;
     if (pageToken) {
-      searchUrl += `&pageToken=${pageToken}`;
+      searchUrl += `&pageToken=${encodeURIComponent(pageToken)}`;
     }
     const searchResponse = await fetch(searchUrl);
 
@@ -479,19 +427,19 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
     const videosResponse = await fetch(
       `${API_BASE_URL}/videos?part=snippet,contentDetails,statistics&id=${videoIds.join(',')}&key=${API_KEY}`
     );
-     if (!videosResponse.ok) {
-        const errorData = await videosResponse.json();
-        console.error(`YouTube API Error (getChannelVideos - videos for channel ${trimmedChannelId}):`, errorData.error?.message);
-        const channelMapForSearch = await fetchChannelData([trimmedChannelId]); 
-        const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapForSearch)));
-        return { videos: fallbackVideos, nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
+    if (!videosResponse.ok) {
+      const errorData = await videosResponse.json();
+      console.error(`YouTube API Error (getChannelVideos - videos for channel ${trimmedChannelId}):`, errorData.error?.message);
+      const channelMapForSearch = await fetchChannelData([trimmedChannelId]);
+      const fallbackVideos = await Promise.all(searchData.items.map((item: any) => transformVideoItem(item, channelMapForSearch)));
+      return { videos: fallbackVideos, nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
     }
     const videosData = await videosResponse.json();
-    if(!videosData.items) {
-        return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
+    if (!videosData.items) {
+      return { videos: [], nextPageToken: searchData.nextPageToken, totalResults: searchData.pageInfo?.totalResults };
     }
 
-    const channelMap = await fetchChannelData([trimmedChannelId]); 
+    const channelMap = await fetchChannelData([trimmedChannelId]);
 
     const videosById = new Map(videosData.items.map((video: any) => [video.id, video]));
     const orderedVideoItems = videoIds.map((id: string) => videosById.get(id)).filter(Boolean);
@@ -504,3 +452,47 @@ export async function getChannelVideos(channelId: string, maxResults: number = 2
     return { videos: [], nextPageToken: undefined, totalResults: 0 };
   }
 }
+
+
+export async function getChannelPlaylists(channelId: string, maxResults: number = 10, pageToken?: string): Promise<PaginatedPlaylistsResponse> {
+  const trimmedChannelId = channelId?.trim();
+  if (!API_KEY) {
+    console.error('YOUTUBE_API_KEY is not set. Returning empty for getChannelPlaylists.');
+    return { playlists: [], nextPageToken: undefined, totalResults: 0 };
+  }
+  if (!trimmedChannelId) {
+    console.warn('getChannelPlaylists called with empty or whitespace channelId. Returning empty.');
+    return { playlists: [], nextPageToken: undefined, totalResults: 0 };
+  }
+
+  try {
+    let url = `${API_BASE_URL}/playlists?part=snippet,contentDetails&channelId=${encodeURIComponent(trimmedChannelId)}&maxResults=${maxResults}&key=${API_KEY}`;
+    if (pageToken) {
+      url += `&pageToken=${encodeURIComponent(pageToken)}`;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`YouTube API Error (getChannelPlaylists for channel ${trimmedChannelId}):`, errorData.error?.message);
+      return { playlists: [], nextPageToken: undefined, totalResults: 0 };
+    }
+    const data = await response.json();
+    if (!data.items) {
+      return { playlists: [], nextPageToken: data.nextPageToken, totalResults: data.pageInfo?.totalResults || 0 };
+    }
+
+    const playlists: Playlist[] = data.items.map(transformPlaylistItemAPI);
+    
+    return { playlists, nextPageToken: data.nextPageToken, totalResults: data.pageInfo?.totalResults };
+  } catch (error) {
+    console.error(`Error fetching playlists for channel ID (${trimmedChannelId}):`, error);
+    return { playlists: [], nextPageToken: undefined, totalResults: 0 };
+  }
+}
+
+// Placeholder for fetching items within a playlist
+// export async function getPlaylistItems(playlistId: string, maxResults: number = 20, pageToken?: string): Promise<PaginatedPlaylistItemsResponse> {
+//   // Implementation would be similar to getChannelVideos but using playlistItems endpoint
+//   return { playlistItems: [], nextPageToken: undefined, totalResults: 0 };
+// }
